@@ -4,11 +4,13 @@
  */
 
 #include <QtTest>
+#include <QTemporaryDir>
 #include <memory>
 #include <optional>
 
 #include "settings/managedsettings.h"
 #include "settings/managedsettingsschema.h"
+#include "settings/settingsources.h"
 
 using namespace OCC;
 
@@ -149,6 +151,35 @@ private slots:
         QCOMPARE(autoCheck->builtinDefault.toBool(), true);
 
         QVERIFY(!ManagedSettingsSchema::find(QStringLiteral("nonexistent")).has_value());
+    }
+
+    void testUserConfigSourceReadsIniValueAndGroup()
+    {
+        QTemporaryDir dir;
+        const auto path = dir.path() + QStringLiteral("/user.cfg");
+        {
+            QSettings settings(path, QSettings::IniFormat);
+            settings.setValue(QStringLiteral("skipUpdateCheck"), true);
+            settings.beginGroup(QStringLiteral("Accounts"));
+            settings.setValue(QStringLiteral("autoUpdateCheck"), false);
+            settings.endGroup();
+            settings.sync();
+        }
+        const UserConfigSource source(path);
+
+        QCOMPARE(source.kind(), SettingSourceKind::UserConfig);
+        QCOMPARE(source.lockState(), LockState::Unlocked);
+        QCOMPARE(source.read(QStringLiteral("skipUpdateCheck"), QString())->toBool(), true);
+        QCOMPARE(source.read(QStringLiteral("autoUpdateCheck"), QStringLiteral("Accounts"))->toBool(), false);
+        QVERIFY(!source.read(QStringLiteral("missing"), QString()).has_value());
+    }
+
+    // The platform adapters read real OS stores, so they cannot be exercised on
+    // the Linux test build. This only checks the factory compiles and runs.
+    void testBuildDeviceSourcesReturnsSources()
+    {
+        const auto sources = buildDeviceSources();
+        QVERIFY(!sources.empty());
     }
 };
 
