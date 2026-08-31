@@ -6,6 +6,7 @@
 #include <QtTest>
 #include <QTemporaryDir>
 #include <QStandardPaths>
+#include <QSet>
 #include <algorithm>
 #include <memory>
 #include <optional>
@@ -43,6 +44,34 @@ private:
     SettingSourceKind _kind;
     LockState _lockState;
     int _priority;
+    QVariantMap _values;
+};
+
+// Fake ForcedPreferenceSource: the test controls which keys are forced and what
+// value each key holds, mirroring the macOS forced-preference semantics without
+// any CoreFoundation dependency.
+class FakeForcedSource : public ForcedPreferenceSource
+{
+public:
+    FakeForcedSource(int priority, QSet<QString> forcedKeys, QVariantMap values)
+        : ForcedPreferenceSource(priority)
+        , _forcedKeys(std::move(forcedKeys))
+        , _values(std::move(values))
+    {
+    }
+
+protected:
+    bool isForced(const QString &key) const override { return _forcedKeys.contains(key); }
+    std::optional<QVariant> copyForcedValue(const QString &key) const override
+    {
+        if (!_values.contains(key)) {
+            return std::nullopt;
+        }
+        return _values.value(key);
+    }
+
+private:
+    QSet<QString> _forcedKeys;
     QVariantMap _values;
 };
 
@@ -145,6 +174,28 @@ private slots:
         QCOMPARE(r.value.toString(), QStringLiteral("beta"));
         QCOMPARE(r.source, SettingSourceKind::UserConfig);
         QVERIFY(!r.isLocked());
+    }
+
+    // A forced-preference source contributes a value only when the key is actually
+    // forced by an administrator. A present but non-forced value must be ignored,
+    // so it never overrides the user's own preference.
+    void testForcedSourceContributesOnlyForcedKeys()
+    {
+        FakeForcedSource source(200,
+            {QStringLiteral("skipUpdateCheck")},
+            QVariantMap{{QStringLiteral("skipUpdateCheck"), true},
+                {QStringLiteral("autoUpdateCheck"), false}});
+
+        QCOMPARE(source.kind(), SettingSourceKind::PlatformPolicy);
+        QCOMPARE(source.lockState(), LockState::Locked);
+        QCOMPARE(source.priority(), 200);
+
+        const auto forced = source.read(QStringLiteral("skipUpdateCheck"), QString());
+        QVERIFY(forced.has_value());
+        QCOMPARE(forced->toBool(), true);
+
+        // Present in the domain but not forced, so it must not be enforced.
+        QVERIFY(!source.read(QStringLiteral("autoUpdateCheck"), QString()).has_value());
     }
 
     void testSchemaHasUpdateSettings()

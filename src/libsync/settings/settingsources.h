@@ -47,6 +47,45 @@ private:
     int _priority;
 };
 
+// Base for a source that enforces a value only when an administrator has forced
+// the key. A present but non-forced value is ignored, so it never overrides the
+// user's own preference. Reports itself as a locked platform policy source.
+class OWNCLOUDSYNC_EXPORT ForcedPreferenceSource : public SettingSource
+{
+public:
+    explicit ForcedPreferenceSource(int priority);
+
+    [[nodiscard]] std::optional<QVariant> read(const QString &key, const QString &group) const override;
+    [[nodiscard]] SettingSourceKind kind() const override;
+    [[nodiscard]] LockState lockState() const override;
+    [[nodiscard]] int priority() const override;
+
+protected:
+    [[nodiscard]] virtual bool isForced(const QString &key) const = 0;
+    // std::nullopt means the key has no value in the domain.
+    [[nodiscard]] virtual std::optional<QVariant> copyForcedValue(const QString &key) const = 0;
+
+private:
+    int _priority;
+};
+
+#ifdef Q_OS_MAC
+// Reads macOS managed preferences for an application domain, treating a key as
+// locked only when CFPreferencesAppValueIsForced reports it forced.
+class OWNCLOUDSYNC_EXPORT MacForcedPreferenceSource : public ForcedPreferenceSource
+{
+public:
+    MacForcedPreferenceSource(QString applicationId, int priority);
+
+protected:
+    [[nodiscard]] bool isForced(const QString &key) const override;
+    [[nodiscard]] std::optional<QVariant> copyForcedValue(const QString &key) const override;
+
+private:
+    QString _applicationId;
+};
+#endif
+
 // Ordered device sources for the running platform, using the same app name
 // selection as ConfigFile::getValue and getPolicySetting.
 [[nodiscard]] OWNCLOUDSYNC_EXPORT std::vector<std::unique_ptr<SettingSource>> buildDeviceSources();

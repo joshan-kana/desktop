@@ -83,6 +83,34 @@ int NativeSettingsSource::priority() const
     return _priority;
 }
 
+ForcedPreferenceSource::ForcedPreferenceSource(int priority)
+    : _priority(priority)
+{
+}
+
+std::optional<QVariant> ForcedPreferenceSource::read(const QString &key, const QString &) const
+{
+    if (!isForced(key)) {
+        return std::nullopt;
+    }
+    return copyForcedValue(key);
+}
+
+SettingSourceKind ForcedPreferenceSource::kind() const
+{
+    return SettingSourceKind::PlatformPolicy;
+}
+
+LockState ForcedPreferenceSource::lockState() const
+{
+    return LockState::Locked;
+}
+
+int ForcedPreferenceSource::priority() const
+{
+    return _priority;
+}
+
 std::vector<std::unique_ptr<SettingSource>> buildDeviceSources()
 {
     [[maybe_unused]] const auto app = Migration::isUnbrandedToBrandedMigration()
@@ -101,10 +129,10 @@ std::vector<std::unique_ptr<SettingSource>> buildDeviceSources()
         QStringLiteral(R"(HKEY_LOCAL_MACHINE\Software\%1\%2)").arg(QString::fromLatin1(APPLICATION_VENDOR), app),
         SettingSourceKind::PlatformDefault, LockState::Unlocked, 20));
 #elif defined(Q_OS_MAC)
-    // TODO(mdm): confirm the forced managed preferences API before treating a managed plist as locked.
-    sources.push_back(std::make_unique<NativeSettingsSource>(
-        QStringLiteral("/Library/Managed Preferences/" APPLICATION_REV_DOMAIN ".plist"),
-        SettingSourceKind::PlatformPolicy, LockState::Locked, 200));
+    // A key counts as locked only when the MDM profile forces it, resolved through
+    // CFPreferences so both host and per user managed preferences are honored.
+    sources.push_back(std::make_unique<MacForcedPreferenceSource>(
+        QStringLiteral(APPLICATION_REV_DOMAIN), 200));
     sources.push_back(std::make_unique<NativeSettingsSource>(
         QStringLiteral("/Library/Preferences/" APPLICATION_REV_DOMAIN ".plist"),
         SettingSourceKind::PlatformDefault, LockState::Unlocked, 20));

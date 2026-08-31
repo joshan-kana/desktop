@@ -185,6 +185,7 @@ if(APPLE)
     list(APPEND libsync_SRCS
         theme_mac.h
         theme_mac.mm
+        settings/settingsources_mac.mm
     )
 endif()
 
