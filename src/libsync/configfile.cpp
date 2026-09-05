@@ -18,6 +18,7 @@
 #include "settings/managedsettings.h"
 #include "settings/managedsettingsschema.h"
 #include "settings/settingsources.h"
+#include "settings/servermanagedsettings.h"
 
 #ifndef TOKEN_AUTH_ONLY
 #include <QWidget>
@@ -31,6 +32,8 @@
 #include <QLoggingCategory>
 #include <QSettings>
 #include <QNetworkProxy>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QStandardPaths>
 #include <QOperatingSystemVersion>
 
@@ -80,6 +83,7 @@ static constexpr char certPasswd[] = "http_certificatePasswd";
 
 static constexpr char serverHasValidSubscriptionC[] = "serverHasValidSubscription";
 static constexpr char desktopEnterpriseChannelName[] = "desktopEnterpriseChannel";
+static constexpr char serverManagedSettingsName[] = "serverManagedSettings";
 
 static constexpr char languageC[] = "language";
 
@@ -686,6 +690,9 @@ bool ConfigFile::resolveManagedBool(const QString &key, const QString &connectio
         resolver.addSource(std::move(deviceSource));
     }
     resolver.addSource(std::make_unique<UserConfigSource>(configFile(), groupName));
+    for (auto &serverSource : buildServerSources(serverManagedSettings())) {
+        resolver.addSource(std::move(serverSource));
+    }
 
     return resolver.resolve(spec).value.toBool();
 }
@@ -1298,6 +1305,31 @@ void ConfigFile::setDesktopEnterpriseChannel(const QString &channel)
 {
     QSettings settings(configFile(), QSettings::IniFormat);
     settings.setValue(QLatin1String(desktopEnterpriseChannelName), UpdateChannel::fromString(channel).toString());
+}
+
+ServerManagedSettings ConfigFile::serverManagedSettings() const
+{
+    QSettings settings(configFile(), QSettings::IniFormat);
+    const auto raw = settings.value(QLatin1String(serverManagedSettingsName)).toString();
+    const auto root = QJsonDocument::fromJson(raw.toUtf8()).object();
+
+    ServerManagedSettings managed;
+    managed.schemaVersion = root.value(QStringLiteral("schemaVersion")).toInt();
+    managed.defaults = root.value(QStringLiteral("defaults")).toObject().toVariantMap();
+    managed.locked = root.value(QStringLiteral("locked")).toObject().toVariantMap();
+    return managed;
+}
+
+void ConfigFile::setServerManagedSettings(const ServerManagedSettings &settings)
+{
+    QJsonObject root;
+    root[QStringLiteral("schemaVersion")] = settings.schemaVersion;
+    root[QStringLiteral("defaults")] = QJsonObject::fromVariantMap(settings.defaults);
+    root[QStringLiteral("locked")] = QJsonObject::fromVariantMap(settings.locked);
+
+    QSettings iniSettings(configFile(), QSettings::IniFormat);
+    iniSettings.setValue(QLatin1String(serverManagedSettingsName),
+        QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact)));
 }
 
 QString ConfigFile::language() const

@@ -24,6 +24,7 @@ namespace OCC {
 
 class AbstractCredentials;
 class Migration;
+struct ServerManagedSettings;
 
 /**
  * @brief The ConfigFile class
@@ -236,6 +237,9 @@ public:
 
     [[nodiscard]] QString desktopEnterpriseChannel() const;
     void setDesktopEnterpriseChannel(const QString &channel);
+
+    [[nodiscard]] ServerManagedSettings serverManagedSettings() const;
+    void setServerManagedSettings(const ServerManagedSettings &settings);
 
     [[nodiscard]] bool hasDesktopEnterpriseChannel() const;
 

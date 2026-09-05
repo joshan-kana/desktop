@@ -15,6 +15,7 @@
 #include "libsync/clientsideencryption.h"
 #include "libsync/configfile.h"
 #include "libsync/cookiejar.h"
+#include "libsync/settings/servermanagedsettings.h"
 #include "libsync/theme.h"
 #include "libsync/clientproxy.h"
 #if !DISABLE_ACCOUNT_MIGRATION
@@ -778,6 +779,7 @@ void AccountManager::removeAccountState(OCC::AccountState *account, AccountRemov
     // clean up config from subscriptions and enterprise channel
     updateServerHasValidSubscriptionConfig();
     updateServerDesktopEnterpriseUpdateChannel();
+    updateServerManagedSettings();
 
     Q_EMIT accountSyncConnectionRemoved(account);
     Q_EMIT accountRemoved(account);
@@ -809,6 +811,32 @@ void AccountManager::updateServerDesktopEnterpriseUpdateChannel()
     }
 
     ConfigFile().setDesktopEnterpriseChannel(most_stable_channel.toString());
+}
+
+void AccountManager::updateServerManagedSettings()
+{
+    // Merge the sanitized server managed settings of all subscribed accounts into
+    // one client global set. Locked wins over defaults, and the first account wins
+    // on a key conflict.
+    ServerManagedSettings merged;
+    for (const auto &account : std::as_const(_accounts)) {
+        if (!account->account()->serverHasValidSubscription()) {
+            continue;
+        }
+        const auto accountSettings = account->account()->serverManagedSettings();
+        for (const auto &[key, value] : accountSettings.locked.asKeyValueRange()) {
+            if (!merged.locked.contains(key)) {
+                merged.locked.insert(key, value);
+            }
+        }
+        for (const auto &[key, value] : accountSettings.defaults.asKeyValueRange()) {
+            if (!merged.defaults.contains(key)) {
+                merged.defaults.insert(key, value);
+            }
+        }
+    }
+
+    ConfigFile().setServerManagedSettings(merged);
 }
 
 #ifdef BUILD_FILE_PROVIDER_MODULE
@@ -911,6 +939,7 @@ void AccountManager::addAccountState(AccountState *const accountState)
 
     updateServerHasValidSubscriptionConfig();
     updateServerDesktopEnterpriseUpdateChannel();
+    updateServerManagedSettings();
 
     Q_EMIT accountAdded(accountState);
 }

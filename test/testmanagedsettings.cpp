@@ -12,9 +12,11 @@
 #include <optional>
 
 #include "configfile.h"
+#include "capabilities.h"
 #include "settings/managedsettings.h"
 #include "settings/managedsettingsschema.h"
 #include "settings/settingsources.h"
+#include "settings/servermanagedsettings.h"
 
 using namespace OCC;
 
@@ -282,6 +284,126 @@ private slots:
         QVERIFY(skip != all.cend());
         QVERIFY(skip->isLocked());
         QCOMPARE(skip->source, SettingSourceKind::PlatformPolicy);
+    }
+
+    void testParseServerManagedSettingsReadsSchemaAndMaps()
+    {
+        const QVariantMap cap{
+            {QStringLiteral("schemaVersion"), 1},
+            {QStringLiteral("defaults"), QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("enabled")}}},
+            {QStringLiteral("locked"), QVariantMap{{QStringLiteral("skipUpdateCheck"), true}}},
+        };
+
+        const auto parsed = parseServerManagedSettings(cap);
+
+        QCOMPARE(parsed.schemaVersion, 1);
+        QCOMPARE(parsed.defaults.value(QStringLiteral("virtualFilesMode")).toString(), QStringLiteral("enabled"));
+        QCOMPARE(parsed.locked.value(QStringLiteral("skipUpdateCheck")).toBool(), true);
+    }
+
+    void testSanitizeKeepsAcceptedKeysDropsUnknown()
+    {
+        ServerManagedSettings raw;
+        raw.defaults = QVariantMap{{QStringLiteral("skipUpdateCheck"), false}, {QStringLiteral("bogus"), 1}};
+        raw.locked = QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("onlineOnly")},
+            {QStringLiteral("secretKey"), QStringLiteral("x")}};
+
+        const auto clean = sanitizeServerManagedSettings(raw);
+
+        QVERIFY(clean.defaults.contains(QStringLiteral("skipUpdateCheck")));
+        QVERIFY(!clean.defaults.contains(QStringLiteral("bogus")));
+        QVERIFY(clean.locked.contains(QStringLiteral("virtualFilesMode")));
+        QVERIFY(!clean.locked.contains(QStringLiteral("secretKey")));
+    }
+
+    void testServerSettingsSourceExposesMapWithKindLockPriority()
+    {
+        const ServerSettingsSource source(QVariantMap{{QStringLiteral("skipUpdateCheck"), true}},
+            SettingSourceKind::ServerLocked, LockState::Locked, 100);
+
+        QCOMPARE(source.kind(), SettingSourceKind::ServerLocked);
+        QCOMPARE(source.lockState(), LockState::Locked);
+        QCOMPARE(source.priority(), 100);
+        QCOMPARE(source.read(QStringLiteral("skipUpdateCheck"), QString())->toBool(), true);
+        QVERIFY(!source.read(QStringLiteral("missing"), QString()).has_value());
+    }
+
+    void testServerLockedEnforcedOverUserButDevicePolicyWins()
+    {
+        ServerManagedSettings raw;
+        raw.locked = QVariantMap{{QStringLiteral("skipUpdateCheck"), true}};
+        const auto clean = sanitizeServerManagedSettings(raw);
+
+        ManagedSettings resolver;
+        resolver.addSource(std::make_unique<MapSource>(SettingSourceKind::UserConfig, LockState::Unlocked, 50,
+            QVariantMap{{QStringLiteral("skipUpdateCheck"), false}}));
+        for (auto &source : buildServerSources(clean)) {
+            resolver.addSource(std::move(source));
+        }
+
+        // Server locked beats the user config.
+        const auto withoutDevice = resolver.resolve(skipSpec());
+        QCOMPARE(withoutDevice.value.toBool(), true);
+        QCOMPARE(withoutDevice.source, SettingSourceKind::ServerLocked);
+
+        // Device policy still beats server locked.
+        resolver.addSource(std::make_unique<MapSource>(SettingSourceKind::PlatformPolicy, LockState::Locked, 200,
+            QVariantMap{{QStringLiteral("skipUpdateCheck"), false}}));
+        const auto withDevice = resolver.resolve(skipSpec());
+        QCOMPARE(withDevice.value.toBool(), false);
+        QCOMPARE(withDevice.source, SettingSourceKind::PlatformPolicy);
+    }
+
+    void testConfigFileServerManagedSettingsRoundtrip()
+    {
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+
+        ServerManagedSettings settings;
+        settings.schemaVersion = 1;
+        settings.defaults = QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("enabled")}};
+        settings.locked = QVariantMap{{QStringLiteral("skipUpdateCheck"), true}};
+        config.setServerManagedSettings(settings);
+
+        const auto read = config.serverManagedSettings();
+        QCOMPARE(read.schemaVersion, 1);
+        QCOMPARE(read.defaults.value(QStringLiteral("virtualFilesMode")).toString(), QStringLiteral("enabled"));
+        QCOMPARE(read.locked.value(QStringLiteral("skipUpdateCheck")).toBool(), true);
+    }
+
+    void testSkipUpdateCheckHonorsServerLockOverUser()
+    {
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+
+        config.setSkipUpdateCheck(false, QString());
+        QCOMPARE(config.skipUpdateCheck(), false);
+
+        ServerManagedSettings settings;
+        settings.locked = QVariantMap{{QStringLiteral("skipUpdateCheck"), true}};
+        config.setServerManagedSettings(settings);
+
+        // Server locked overrides the user value.
+        QCOMPARE(config.skipUpdateCheck(), true);
+    }
+
+    void testCapabilitiesParsesDesktopClientManagedSettings()
+    {
+        const QVariantMap caps{
+            {QStringLiteral("support"), QVariantMap{
+                {QStringLiteral("desktopClient"), QVariantMap{
+                    {QStringLiteral("schemaVersion"), 1},
+                    {QStringLiteral("locked"), QVariantMap{{QStringLiteral("skipUpdateCheck"), true}}},
+                }},
+            }},
+        };
+        const Capabilities capabilities(caps);
+        const auto parsed = capabilities.desktopClientManagedSettings();
+
+        QCOMPARE(parsed.schemaVersion, 1);
+        QCOMPARE(parsed.locked.value(QStringLiteral("skipUpdateCheck")).toBool(), true);
     }
 };
 
