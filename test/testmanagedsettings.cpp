@@ -17,6 +17,7 @@
 #include "settings/managedsettingsschema.h"
 #include "settings/settingsources.h"
 #include "settings/servermanagedsettings.h"
+#include "settings/managedconfig.h"
 
 using namespace OCC;
 
@@ -443,6 +444,24 @@ private slots:
         QCOMPARE(config.getConfig<bool>(QStringLiteral("skipUpdateCheck")), true);
         QVERIFY(config.isEnforced(QStringLiteral("skipUpdateCheck")));
         QCOMPARE(config.sourceOf(QStringLiteral("skipUpdateCheck")), SettingSourceKind::ServerEnforced);
+    }
+
+    void testServerSettingsAreCachedAndPersisted()
+    {
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+
+        ServerManagedSettings settings;
+        settings.schemaVersion = 1;
+        settings.enforced = QVariantMap{{QStringLiteral("skipUpdateCheck"), true}};
+        config.setServerManagedSettings(settings);
+
+        QCOMPARE(config.serverManagedSettings().enforced.value(QStringLiteral("skipUpdateCheck")).toBool(), true);
+
+        // Dropping the cache reparses from the config file, proving persistence.
+        ManagedConfig::instance().invalidate();
+        QCOMPARE(config.serverManagedSettings().enforced.value(QStringLiteral("skipUpdateCheck")).toBool(), true);
     }
 };
 

@@ -19,6 +19,7 @@
 #include "settings/managedsettingsschema.h"
 #include "settings/settingsources.h"
 #include "settings/servermanagedsettings.h"
+#include "settings/managedconfig.h"
 
 #ifndef TOKEN_AUTH_ONLY
 #include <QWidget>
@@ -32,8 +33,6 @@
 #include <QLoggingCategory>
 #include <QSettings>
 #include <QNetworkProxy>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QStandardPaths>
 #include <QOperatingSystemVersion>
 
@@ -83,7 +82,6 @@ static constexpr char certPasswd[] = "http_certificatePasswd";
 
 static constexpr char serverHasValidSubscriptionC[] = "serverHasValidSubscription";
 static constexpr char desktopEnterpriseChannelName[] = "desktopEnterpriseChannel";
-static constexpr char serverManagedSettingsName[] = "serverManagedSettings";
 
 static constexpr char languageC[] = "language";
 
@@ -1335,27 +1333,12 @@ void ConfigFile::setDesktopEnterpriseChannel(const QString &channel)
 
 ServerManagedSettings ConfigFile::serverManagedSettings() const
 {
-    QSettings settings(configFile(), QSettings::IniFormat);
-    const auto raw = settings.value(QLatin1String(serverManagedSettingsName)).toString();
-    const auto root = QJsonDocument::fromJson(raw.toUtf8()).object();
-
-    ServerManagedSettings managed;
-    managed.schemaVersion = root.value(QStringLiteral("schemaVersion")).toInt();
-    managed.defaults = root.value(QStringLiteral("defaults")).toObject().toVariantMap();
-    managed.enforced = root.value(QStringLiteral("enforced")).toObject().toVariantMap();
-    return managed;
+    return ManagedConfig::instance().serverSettings(configFile());
 }
 
 void ConfigFile::setServerManagedSettings(const ServerManagedSettings &settings)
 {
-    QJsonObject root;
-    root[QStringLiteral("schemaVersion")] = settings.schemaVersion;
-    root[QStringLiteral("defaults")] = QJsonObject::fromVariantMap(settings.defaults);
-    root[QStringLiteral("enforced")] = QJsonObject::fromVariantMap(settings.enforced);
-
-    QSettings iniSettings(configFile(), QSettings::IniFormat);
-    iniSettings.setValue(QLatin1String(serverManagedSettingsName),
-        QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact)));
+    ManagedConfig::instance().setServerSettings(configFile(), settings);
 }
 
 QString ConfigFile::language() const

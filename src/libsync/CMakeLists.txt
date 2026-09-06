@@ -176,6 +176,8 @@ set(libsync_SRCS
     settings/settingsources.cpp
     settings/servermanagedsettings.h
     settings/servermanagedsettings.cpp
+    settings/managedconfig.h
+    settings/managedconfig.cpp
 )
 
 if (WIN32)
