@@ -57,6 +57,10 @@ ManagedValue ManagedSettings::resolve(const SettingSpec &spec, const QString &gr
     if (!winner) {
         return {spec.key, spec.builtinDefault, SettingSourceKind::BuiltinDefault, EnforcementState::NotEnforced, false};
     }
+    // Convert to the schema declared type, which builtinDefault carries.
+    if (spec.builtinDefault.isValid()) {
+        winnerValue.convert(spec.builtinDefault.metaType());
+    }
     return {spec.key, winnerValue, winner->kind(), winner->enforcement(), true};
 }
 

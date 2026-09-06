@@ -403,6 +403,47 @@ private slots:
         QCOMPARE(parsed.schemaVersion, 1);
         QCOMPARE(parsed.enforced.value(QStringLiteral("skipUpdateCheck")).toBool(), true);
     }
+
+    void testGetConfigResolvesUserValueWithMetadata()
+    {
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+
+        QVERIFY(config.setConfig(QStringLiteral("skipUpdateCheck"), true));
+        QCOMPARE(config.getConfig<bool>(QStringLiteral("skipUpdateCheck")), true);
+
+        const auto resolved = config.getConfig(QStringLiteral("skipUpdateCheck"));
+        QCOMPARE(resolved.source, SettingSourceKind::UserConfig);
+        QVERIFY(!resolved.isEnforced());
+    }
+
+    void testGetConfigStringUnmanagedKeyFallsBackToUser()
+    {
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+
+        QVERIFY(config.setConfig(QStringLiteral("someText"), QStringLiteral("hello")));
+        QCOMPARE(config.getConfig<QString>(QStringLiteral("someText")), QStringLiteral("hello"));
+    }
+
+    void testSetConfigRefusesWhenEnforced()
+    {
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+
+        ServerManagedSettings serverSettings;
+        serverSettings.enforced = QVariantMap{{QStringLiteral("skipUpdateCheck"), true}};
+        config.setServerManagedSettings(serverSettings);
+
+        // A user cannot override an enforced value.
+        QCOMPARE(config.setConfig(QStringLiteral("skipUpdateCheck"), false), false);
+        QCOMPARE(config.getConfig<bool>(QStringLiteral("skipUpdateCheck")), true);
+        QVERIFY(config.isEnforced(QStringLiteral("skipUpdateCheck")));
+        QCOMPARE(config.sourceOf(QStringLiteral("skipUpdateCheck")), SettingSourceKind::ServerEnforced);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestManagedSettings)

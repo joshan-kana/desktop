@@ -8,6 +8,7 @@
 #define CONFIGFILE_H
 
 #include "owncloudlib.h"
+#include "settings/managedsettings.h"
 #include <memory>
 #include <QSharedPointer>
 #include <QSettings>
@@ -241,6 +242,22 @@ public:
     [[nodiscard]] ServerManagedSettings serverManagedSettings() const;
     void setServerManagedSettings(const ServerManagedSettings &settings);
 
+    // The single enforcement aware read path: resolves name across device enforced
+    // policy, server enforced policy, user config and defaults, returning the value
+    // plus its source and enforcement.
+    [[nodiscard]] ManagedValue getConfig(const QString &name, const QVariant &builtinDefault = {},
+        const QString &connectionGroupName = {}) const;
+    // Typed read; the value is converted to the schema type, T is the caller's type.
+    template<typename T>
+    [[nodiscard]] T getConfig(const QString &name, const QString &connectionGroupName = {}) const
+    {
+        return getConfig(name, QVariant{}, connectionGroupName).value.template value<T>();
+    }
+    // Writes the user config, unless the effective value is enforced; returns false then.
+    bool setConfig(const QString &name, const QVariant &value, const QString &connectionGroupName = {});
+    [[nodiscard]] bool isEnforced(const QString &name, const QString &connectionGroupName = {}) const;
+    [[nodiscard]] SettingSourceKind sourceOf(const QString &name, const QString &connectionGroupName = {}) const;
+
     [[nodiscard]] bool hasDesktopEnterpriseChannel() const;
 
     /// Enforce a specific language used for the UI
@@ -316,7 +333,6 @@ protected:
 private:
     [[nodiscard]] QVariant getValue(const QString &param, const QString &group = QString(),
         const QVariant &defaultValue = QVariant()) const;
-    [[nodiscard]] bool resolveManagedBool(const QString &key, const QString &connectionGroupName, bool builtinDefault) const;
     void setValue(const QString &key, const QVariant &value);
 
     [[nodiscard]] QString keychainProxyPasswordKey() const;

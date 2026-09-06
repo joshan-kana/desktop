@@ -662,7 +662,7 @@ chrono::milliseconds ConfigFile::updateCheckInterval(const QString &connectionGr
 
 bool ConfigFile::skipUpdateCheck(const QString &connectionGroupName) const
 {
-    return resolveManagedBool(QLatin1String(skipUpdateCheckC), connectionGroupName, false);
+    return getConfig<bool>(QLatin1String(skipUpdateCheckC), connectionGroupName);
 }
 
 void ConfigFile::setSkipUpdateCheck(bool skip, const QString &connectionGroupName)
@@ -677,13 +677,13 @@ void ConfigFile::setSkipUpdateCheck(bool skip, const QString &connectionGroupNam
 
 bool ConfigFile::autoUpdateCheck(const QString &connectionGroupName) const
 {
-    return resolveManagedBool(QLatin1String(autoUpdateCheckC), connectionGroupName, true);
+    return getConfig<bool>(QLatin1String(autoUpdateCheckC), connectionGroupName);
 }
 
-bool ConfigFile::resolveManagedBool(const QString &key, const QString &connectionGroupName, bool builtinDefault) const
+ManagedValue ConfigFile::getConfig(const QString &name, const QVariant &builtinDefault, const QString &connectionGroupName) const
 {
     const auto groupName = connectionGroupName.isEmpty() ? defaultConnectionGroupName() : connectionGroupName;
-    const auto spec = ManagedSettingsSchema::find(key).value_or(SettingSpec{key, builtinDefault, true, SettingScope::User});
+    const auto spec = ManagedSettingsSchema::find(name).value_or(SettingSpec{name, builtinDefault, true, SettingScope::User});
 
     ManagedSettings resolver;
     for (auto &deviceSource : buildDeviceSources()) {
@@ -694,7 +694,33 @@ bool ConfigFile::resolveManagedBool(const QString &key, const QString &connectio
         resolver.addSource(std::move(serverSource));
     }
 
-    return resolver.resolve(spec).value.toBool();
+    return resolver.resolve(spec);
+}
+
+bool ConfigFile::setConfig(const QString &name, const QVariant &value, const QString &connectionGroupName)
+{
+    const auto groupName = connectionGroupName.isEmpty() ? defaultConnectionGroupName() : connectionGroupName;
+    if (getConfig(name, value, groupName).isEnforced()) {
+        return false;
+    }
+
+    QSettings settings(configFile(), QSettings::IniFormat);
+    if (!groupName.isEmpty()) {
+        settings.beginGroup(groupName);
+    }
+    settings.setValue(name, value);
+    settings.sync();
+    return true;
+}
+
+bool ConfigFile::isEnforced(const QString &name, const QString &connectionGroupName) const
+{
+    return getConfig(name, {}, connectionGroupName).isEnforced();
+}
+
+SettingSourceKind ConfigFile::sourceOf(const QString &name, const QString &connectionGroupName) const
+{
+    return getConfig(name, {}, connectionGroupName).source;
 }
 
 void ConfigFile::setAutoUpdateCheck(bool autoCheck, const QString &connectionGroupName)
