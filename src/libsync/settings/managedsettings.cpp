@@ -9,12 +9,12 @@ namespace OCC {
 
 namespace {
 // Higher tier always wins; within a tier the higher source priority wins.
-int tierOf(const LockState lockState, const SettingSourceKind kind)
+int tierOf(const EnforcementState enforcement, const SettingSourceKind kind)
 {
-    switch (lockState) {
-    case LockState::Locked:
+    switch (enforcement) {
+    case EnforcementState::Enforced:
         return 2;
-    case LockState::Unlocked:
+    case EnforcementState::NotEnforced:
         return kind == SettingSourceKind::UserConfig ? 1 : 0;
     }
     return 0;
@@ -36,15 +36,15 @@ ManagedValue ManagedSettings::resolve(const SettingSpec &spec, const QString &gr
     auto winnerPriority = 0;
 
     for (const auto &source : _sources) {
-        const auto lockState = source->lockState();
-        if (lockState == LockState::Locked && !spec.lockable) {
+        const auto enforcement = source->enforcement();
+        if (enforcement == EnforcementState::Enforced && !spec.enforceable) {
             continue;
         }
         const auto value = source->read(spec.key, group);
         if (!value.has_value()) {
             continue;
         }
-        const auto tier = tierOf(lockState, source->kind());
+        const auto tier = tierOf(enforcement, source->kind());
         const auto priority = source->priority();
         if (tier > winnerTier || (tier == winnerTier && priority > winnerPriority)) {
             winner = source.get();
@@ -55,9 +55,9 @@ ManagedValue ManagedSettings::resolve(const SettingSpec &spec, const QString &gr
     }
 
     if (!winner) {
-        return {spec.key, spec.builtinDefault, SettingSourceKind::BuiltinDefault, LockState::Unlocked, false};
+        return {spec.key, spec.builtinDefault, SettingSourceKind::BuiltinDefault, EnforcementState::NotEnforced, false};
     }
-    return {spec.key, winnerValue, winner->kind(), winner->lockState(), true};
+    return {spec.key, winnerValue, winner->kind(), winner->enforcement(), true};
 }
 
 QList<ManagedValue> ManagedSettings::resolveAll(const QList<SettingSpec> &specs, const QString &group) const

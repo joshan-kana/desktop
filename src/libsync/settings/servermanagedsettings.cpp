@@ -10,12 +10,10 @@
 namespace OCC {
 
 namespace {
-// Keys the client accepts from the server, and whether the server may enforce
-// (lock) each. Tightening this map is how server delivered settings are
-// restricted. Security note: update and proxy keys are server lockable by
-// request, so a trusted server can enforce them; device policy still wins.
+// Keys the client accepts from the server and whether each is server enforceable.
+// Update and proxy keys are enforceable by request; device policy still wins.
 struct ServerKeyPolicy {
-    bool serverLockable = false;
+    bool serverEnforceable = false;
 };
 
 const QHash<QString, ServerKeyPolicy> &acceptedServerKeys()
@@ -42,7 +40,7 @@ ServerManagedSettings parseServerManagedSettings(const QVariantMap &desktopClien
     ServerManagedSettings parsed;
     parsed.schemaVersion = desktopClientCapability.value(QStringLiteral("schemaVersion")).toInt();
     parsed.defaults = desktopClientCapability.value(QStringLiteral("defaults")).toMap();
-    parsed.locked = desktopClientCapability.value(QStringLiteral("locked")).toMap();
+    parsed.enforced = desktopClientCapability.value(QStringLiteral("enforced")).toMap();
     return parsed;
 }
 
@@ -57,19 +55,19 @@ ServerManagedSettings sanitizeServerManagedSettings(const ServerManagedSettings 
             clean.defaults.insert(key, value);
         }
     }
-    for (const auto &[key, value] : raw.locked.asKeyValueRange()) {
+    for (const auto &[key, value] : raw.enforced.asKeyValueRange()) {
         const auto policy = accepted.constFind(key);
-        if (policy != accepted.cend() && policy->serverLockable) {
-            clean.locked.insert(key, value);
+        if (policy != accepted.cend() && policy->serverEnforceable) {
+            clean.enforced.insert(key, value);
         }
     }
     return clean;
 }
 
-ServerSettingsSource::ServerSettingsSource(QVariantMap values, SettingSourceKind kind, LockState lockState, int priority)
+ServerSettingsSource::ServerSettingsSource(QVariantMap values, SettingSourceKind kind, EnforcementState enforcement, int priority)
     : _values(std::move(values))
     , _kind(kind)
-    , _lockState(lockState)
+    , _enforcement(enforcement)
     , _priority(priority)
 {
 }
@@ -87,9 +85,9 @@ SettingSourceKind ServerSettingsSource::kind() const
     return _kind;
 }
 
-LockState ServerSettingsSource::lockState() const
+EnforcementState ServerSettingsSource::enforcement() const
 {
-    return _lockState;
+    return _enforcement;
 }
 
 int ServerSettingsSource::priority() const
@@ -100,13 +98,13 @@ int ServerSettingsSource::priority() const
 std::vector<std::unique_ptr<SettingSource>> buildServerSources(const ServerManagedSettings &sanitized)
 {
     std::vector<std::unique_ptr<SettingSource>> sources;
-    if (!sanitized.locked.isEmpty()) {
+    if (!sanitized.enforced.isEmpty()) {
         sources.push_back(std::make_unique<ServerSettingsSource>(
-            sanitized.locked, SettingSourceKind::ServerLocked, LockState::Locked, 100));
+            sanitized.enforced, SettingSourceKind::ServerEnforced, EnforcementState::Enforced, 100));
     }
     if (!sanitized.defaults.isEmpty()) {
         sources.push_back(std::make_unique<ServerSettingsSource>(
-            sanitized.defaults, SettingSourceKind::ServerDefault, LockState::Unlocked, 30));
+            sanitized.defaults, SettingSourceKind::ServerDefault, EnforcementState::NotEnforced, 30));
     }
     return sources;
 }

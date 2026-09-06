@@ -38,9 +38,9 @@ SettingSourceKind UserConfigSource::kind() const
     return SettingSourceKind::UserConfig;
 }
 
-LockState UserConfigSource::lockState() const
+EnforcementState UserConfigSource::enforcement() const
 {
-    return LockState::Unlocked;
+    return EnforcementState::NotEnforced;
 }
 
 int UserConfigSource::priority() const
@@ -48,10 +48,10 @@ int UserConfigSource::priority() const
     return 50;
 }
 
-NativeSettingsSource::NativeSettingsSource(QString location, SettingSourceKind kind, LockState lockState, int priority)
+NativeSettingsSource::NativeSettingsSource(QString location, SettingSourceKind kind, EnforcementState enforcement, int priority)
     : _location(std::move(location))
     , _kind(kind)
-    , _lockState(lockState)
+    , _enforcement(enforcement)
     , _priority(priority)
 {
 }
@@ -73,9 +73,9 @@ SettingSourceKind NativeSettingsSource::kind() const
     return _kind;
 }
 
-LockState NativeSettingsSource::lockState() const
+EnforcementState NativeSettingsSource::enforcement() const
 {
-    return _lockState;
+    return _enforcement;
 }
 
 int NativeSettingsSource::priority() const
@@ -101,9 +101,9 @@ SettingSourceKind ForcedPreferenceSource::kind() const
     return SettingSourceKind::PlatformPolicy;
 }
 
-LockState ForcedPreferenceSource::lockState() const
+EnforcementState ForcedPreferenceSource::enforcement() const
 {
-    return LockState::Locked;
+    return EnforcementState::Enforced;
 }
 
 int ForcedPreferenceSource::priority() const
@@ -121,25 +121,25 @@ std::vector<std::unique_ptr<SettingSource>> buildDeviceSources()
 #if defined(Q_OS_WIN)
     sources.push_back(std::make_unique<NativeSettingsSource>(
         QStringLiteral(R"(HKEY_CURRENT_USER\Software\Policies\%1\%2)").arg(QString::fromLatin1(APPLICATION_VENDOR), app),
-        SettingSourceKind::PlatformPolicy, LockState::Locked, 210));
+        SettingSourceKind::PlatformPolicy, EnforcementState::Enforced, 210));
     sources.push_back(std::make_unique<NativeSettingsSource>(
         QStringLiteral(R"(HKEY_LOCAL_MACHINE\Software\Policies\%1\%2)").arg(QString::fromLatin1(APPLICATION_VENDOR), app),
-        SettingSourceKind::PlatformPolicy, LockState::Locked, 200));
+        SettingSourceKind::PlatformPolicy, EnforcementState::Enforced, 200));
     sources.push_back(std::make_unique<NativeSettingsSource>(
         QStringLiteral(R"(HKEY_LOCAL_MACHINE\Software\%1\%2)").arg(QString::fromLatin1(APPLICATION_VENDOR), app),
-        SettingSourceKind::PlatformDefault, LockState::Unlocked, 20));
+        SettingSourceKind::PlatformDefault, EnforcementState::NotEnforced, 20));
 #elif defined(Q_OS_MAC)
-    // A key counts as locked only when the MDM profile forces it, resolved through
+    // A key counts as enforced only when the MDM profile forces it, resolved through
     // CFPreferences so both host and per user managed preferences are honored.
     sources.push_back(std::make_unique<MacForcedPreferenceSource>(
         QStringLiteral(APPLICATION_REV_DOMAIN), 200));
     sources.push_back(std::make_unique<NativeSettingsSource>(
         QStringLiteral("/Library/Preferences/" APPLICATION_REV_DOMAIN ".plist"),
-        SettingSourceKind::PlatformDefault, LockState::Unlocked, 20));
+        SettingSourceKind::PlatformDefault, EnforcementState::NotEnforced, 20));
 #else
     sources.push_back(std::make_unique<NativeSettingsSource>(
         QStringLiteral(SYSCONFDIR "/%1/%1.conf").arg(app),
-        SettingSourceKind::PlatformDefault, LockState::Unlocked, 20));
+        SettingSourceKind::PlatformDefault, EnforcementState::NotEnforced, 20));
 #endif
     return sources;
 }

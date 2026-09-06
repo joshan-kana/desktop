@@ -24,12 +24,12 @@ enum class SettingSourceKind {
     UserConfig,
     PlatformPolicy,
     ServerDefault, // phase 2
-    ServerLocked, // phase 2
+    ServerEnforced, // phase 2
 };
 
-enum class LockState {
-    Unlocked,
-    Locked,
+enum class EnforcementState {
+    NotEnforced,
+    Enforced,
 };
 
 enum class SettingScope {
@@ -43,16 +43,16 @@ struct ManagedValue {
     QString key;
     QVariant value;
     SettingSourceKind source = SettingSourceKind::BuiltinDefault;
-    LockState lockState = LockState::Unlocked;
+    EnforcementState enforcement = EnforcementState::NotEnforced;
     bool present = false; // false when only the builtin default applied
 
-    [[nodiscard]] bool isLocked() const { return lockState == LockState::Locked; }
+    [[nodiscard]] bool isEnforced() const { return enforcement == EnforcementState::Enforced; }
 };
 
 struct SettingSpec {
     QString key;
     QVariant builtinDefault;
-    bool lockable = false;
+    bool enforceable = false;
     SettingScope scope = SettingScope::User;
 };
 
@@ -64,7 +64,7 @@ public:
     // std::nullopt means the source does not define key.
     [[nodiscard]] virtual std::optional<QVariant> read(const QString &key, const QString &group) const = 0;
     [[nodiscard]] virtual SettingSourceKind kind() const = 0;
-    [[nodiscard]] virtual LockState lockState() const = 0;
+    [[nodiscard]] virtual EnforcementState enforcement() const = 0;
     [[nodiscard]] virtual int priority() const = 0;
 };
 
@@ -74,15 +74,15 @@ public:
  * config.php (admin)                                     [server, optional]
  *   |
  *   support app Capabilities::getCapabilities
- *   |   allow-list filter, enterprise subscription gate
+ *   |   allow list filter, enterprise subscription gate
  *   |
- *   OCS: support.desktopClient { defaults, locked }
+ *   OCS: support.desktopClient { defaults, enforced }
  *   |
  * Account::setCapabilities                               [client]
  *   |
  *   Account::updateServerManagedSettings
- *   |   Capabilities::desktopClientManagedSettings -> parseServerManagedSettings
- *   |   sanitizeServerManagedSettings  (client allow-list, drops non lockable)
+ *   |   Capabilities::desktopClientManagedSettings then parseServerManagedSettings
+ *   |   sanitizeServerManagedSettings  (client allow list, drops non enforceable)
  *   |
  *   AccountManager::updateServerManagedSettings
  *   |   merge subscribed accounts (the subscribed account wins)
@@ -93,17 +93,17 @@ public:
  *   |
  *   ConfigFile::resolveManagedBool
  *     |   add the sources for this key:
- *     |-- buildDeviceSources()   Windows GP / macOS forced (locked), OS default
- *     |-- UserConfigSource       the user .cfg
- *     |-- buildServerSources()   server locked, server default
+ *     |   buildDeviceSources()   Windows GP / macOS forced (enforced), OS default
+ *     |   UserConfigSource       the user .cfg
+ *     |   buildServerSources()   server enforced, server default
  *     |
  *     ManagedSettings::resolve(spec)
  *       |   highest precedence level wins, ties broken by source priority:
  *       |
- *       device locked (200) > server locked (100) > user (50)
+ *       device enforced (200) > server enforced (100) > user (50)
  *                           > server default (30) > device default (20) > builtin
  *       |
- *   ManagedValue { value, source, locked/default }       [return]
+ *   ManagedValue { value, source, enforced/default }       [return]
  */
 class OWNCLOUDSYNC_EXPORT ManagedSettings
 {

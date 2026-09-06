@@ -16,12 +16,12 @@ namespace OCC {
 class OWNCLOUDSYNC_EXPORT UserConfigSource : public SettingSource
 {
 public:
-    // A non-empty group is always used and overrides the group passed to read().
+    // A non empty group is always used and overrides the group passed to read().
     explicit UserConfigSource(QString configFilePath, QString group = {});
 
     [[nodiscard]] std::optional<QVariant> read(const QString &key, const QString &group) const override;
     [[nodiscard]] SettingSourceKind kind() const override;
-    [[nodiscard]] LockState lockState() const override;
+    [[nodiscard]] EnforcementState enforcement() const override;
     [[nodiscard]] int priority() const override;
 
 private:
@@ -33,23 +33,22 @@ private:
 class OWNCLOUDSYNC_EXPORT NativeSettingsSource : public SettingSource
 {
 public:
-    NativeSettingsSource(QString location, SettingSourceKind kind, LockState lockState, int priority);
+    NativeSettingsSource(QString location, SettingSourceKind kind, EnforcementState enforcement, int priority);
 
     [[nodiscard]] std::optional<QVariant> read(const QString &key, const QString &group) const override;
     [[nodiscard]] SettingSourceKind kind() const override;
-    [[nodiscard]] LockState lockState() const override;
+    [[nodiscard]] EnforcementState enforcement() const override;
     [[nodiscard]] int priority() const override;
 
 private:
     QString _location;
     SettingSourceKind _kind;
-    LockState _lockState;
+    EnforcementState _enforcement;
     int _priority;
 };
 
-// Base for a source that enforces a value only when an administrator has forced
-// the key. A present but non-forced value is ignored, so it never overrides the
-// user's own preference. Reports itself as a locked platform policy source.
+// Base for an enforced policy source that contributes a value only when an
+// administrator has forced the key.
 class OWNCLOUDSYNC_EXPORT ForcedPreferenceSource : public SettingSource
 {
 public:
@@ -57,7 +56,7 @@ public:
 
     [[nodiscard]] std::optional<QVariant> read(const QString &key, const QString &group) const override;
     [[nodiscard]] SettingSourceKind kind() const override;
-    [[nodiscard]] LockState lockState() const override;
+    [[nodiscard]] EnforcementState enforcement() const override;
     [[nodiscard]] int priority() const override;
 
 protected:
@@ -71,7 +70,7 @@ private:
 
 #ifdef Q_OS_MAC
 // Reads macOS managed preferences for an application domain, treating a key as
-// locked only when CFPreferencesAppValueIsForced reports it forced.
+// enforced only when CFPreferencesAppValueIsForced reports it forced.
 class OWNCLOUDSYNC_EXPORT MacForcedPreferenceSource : public ForcedPreferenceSource
 {
 public:
@@ -86,8 +85,7 @@ private:
 };
 #endif
 
-// Ordered device sources for the running platform, using the same app name
-// selection as ConfigFile::getValue and getPolicySetting.
+// Ordered device sources for the running platform.
 [[nodiscard]] OWNCLOUDSYNC_EXPORT std::vector<std::unique_ptr<SettingSource>> buildDeviceSources();
 
 } // namespace OCC

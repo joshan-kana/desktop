@@ -23,11 +23,11 @@ namespace OCC {
  * resolver can read. See ManagedSettings for the full resolution flow.
  *
  * [server, support app]                     (separate repo, enterprise gated)
- *   config.php: desktopclient.defaults / .locked
+ *   config.php: desktopclient.defaults / .enforced
  *     |
- *   DesktopClientSettingsService   allow-list, never secrets
+ *   DesktopClientSettingsService   allow list, never secrets
  *     |
- *   Capabilities: support.desktopClient { schemaVersion, defaults, locked }
+ *   Capabilities: support.desktopClient { schemaVersion, defaults, enforced }
  *     |
  *   OCS  /cloud/capabilities
  *     |
@@ -35,11 +35,11 @@ namespace OCC {
  *   Account::setCapabilities
  *     |
  *   Capabilities::desktopClientManagedSettings
- *     |   parseServerManagedSettings   (capability map -> ServerManagedSettings)
+ *     |   parseServerManagedSettings   (capability map into ServerManagedSettings)
  *     |
  *   sanitizeServerManagedSettings
- *     |   client allow-list: drop unknown keys,
- *     |   keep only server lockable keys in locked
+ *     |   client allow list: drop unknown keys,
+ *     |   keep only server enforceable keys in enforced
  *     |
  *   AccountManager::updateServerManagedSettings
  *     |   merge subscribed accounts, the subscribed account wins
@@ -47,47 +47,46 @@ namespace OCC {
  *   ConfigFile::setServerManagedSettings   (JSON in .cfg, offline cache)
  *     |
  *   buildServerSources
- *     |-- ServerSettingsSource  locked    (ServerLocked, priority 100)
- *     |-- ServerSettingsSource  defaults  (ServerDefault, priority 30)
+ *     |   ServerSettingsSource  enforced    (ServerEnforced, priority 100)
+ *     |   ServerSettingsSource  defaults  (ServerDefault, priority 30)
  *     |
  *   [added to the resolver by ConfigFile::resolveManagedBool]
  */
 
 // Managed settings delivered by the server through the support.desktopClient
-// capability. defaults are suggestions, locked are enforced.
+// capability. defaults are suggestions; enforced values cannot be changed.
 struct ServerManagedSettings {
     int schemaVersion = 0;
     QVariantMap defaults;
-    QVariantMap locked;
+    QVariantMap enforced;
 };
 
 // Parse the support.desktopClient capability submap into ServerManagedSettings.
 [[nodiscard]] OWNCLOUDSYNC_EXPORT ServerManagedSettings parseServerManagedSettings(const QVariantMap &desktopClientCapability);
 
-// Apply the client allow-list: keep only accepted keys in defaults, and only
-// accepted server-lockable keys in locked. Single control point for what the
-// server may deliver and enforce.
+// Apply the client allow list: accepted keys in defaults, accepted server
+// enforceable keys in enforced. The control point for server input.
 [[nodiscard]] OWNCLOUDSYNC_EXPORT ServerManagedSettings sanitizeServerManagedSettings(const ServerManagedSettings &raw);
 
-// A setting source backed by an in-memory map, the sanitized server values.
+// A source backed by an in memory map of sanitized server values.
 class OWNCLOUDSYNC_EXPORT ServerSettingsSource : public SettingSource
 {
 public:
-    ServerSettingsSource(QVariantMap values, SettingSourceKind kind, LockState lockState, int priority);
+    ServerSettingsSource(QVariantMap values, SettingSourceKind kind, EnforcementState enforcement, int priority);
 
     [[nodiscard]] std::optional<QVariant> read(const QString &key, const QString &group) const override;
     [[nodiscard]] SettingSourceKind kind() const override;
-    [[nodiscard]] LockState lockState() const override;
+    [[nodiscard]] EnforcementState enforcement() const override;
     [[nodiscard]] int priority() const override;
 
 private:
     QVariantMap _values;
     SettingSourceKind _kind;
-    LockState _lockState;
+    EnforcementState _enforcement;
     int _priority;
 };
 
-// Build the server default (priority 30) and server locked (priority 100) sources
+// Build the server default (priority 30) and server enforced (priority 100) sources
 // from already sanitized settings. Empty maps produce no source.
 [[nodiscard]] OWNCLOUDSYNC_EXPORT std::vector<std::unique_ptr<SettingSource>> buildServerSources(const ServerManagedSettings &sanitized);
 

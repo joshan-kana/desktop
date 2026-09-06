@@ -815,18 +815,17 @@ void AccountManager::updateServerDesktopEnterpriseUpdateChannel()
 
 void AccountManager::updateServerManagedSettings()
 {
-    // Merge the sanitized server managed settings of all subscribed accounts into
-    // one client global set. Locked wins over defaults, and the first account wins
-    // on a key conflict.
+    // Merge subscribed accounts into one set; the first account wins on a key
+    // conflict.
     ServerManagedSettings merged;
     for (const auto &account : std::as_const(_accounts)) {
         if (!account->account()->serverHasValidSubscription()) {
             continue;
         }
         const auto accountSettings = account->account()->serverManagedSettings();
-        for (const auto &[key, value] : accountSettings.locked.asKeyValueRange()) {
-            if (!merged.locked.contains(key)) {
-                merged.locked.insert(key, value);
+        for (const auto &[key, value] : accountSettings.enforced.asKeyValueRange()) {
+            if (!merged.enforced.contains(key)) {
+                merged.enforced.insert(key, value);
             }
         }
         for (const auto &[key, value] : accountSettings.defaults.asKeyValueRange()) {

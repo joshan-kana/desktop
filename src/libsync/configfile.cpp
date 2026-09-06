@@ -1316,7 +1316,7 @@ ServerManagedSettings ConfigFile::serverManagedSettings() const
     ServerManagedSettings managed;
     managed.schemaVersion = root.value(QStringLiteral("schemaVersion")).toInt();
     managed.defaults = root.value(QStringLiteral("defaults")).toObject().toVariantMap();
-    managed.locked = root.value(QStringLiteral("locked")).toObject().toVariantMap();
+    managed.enforced = root.value(QStringLiteral("enforced")).toObject().toVariantMap();
     return managed;
 }
 
@@ -1325,7 +1325,7 @@ void ConfigFile::setServerManagedSettings(const ServerManagedSettings &settings)
     QJsonObject root;
     root[QStringLiteral("schemaVersion")] = settings.schemaVersion;
     root[QStringLiteral("defaults")] = QJsonObject::fromVariantMap(settings.defaults);
-    root[QStringLiteral("locked")] = QJsonObject::fromVariantMap(settings.locked);
+    root[QStringLiteral("enforced")] = QJsonObject::fromVariantMap(settings.enforced);
 
     QSettings iniSettings(configFile(), QSettings::IniFormat);
     iniSettings.setValue(QLatin1String(serverManagedSettingsName),
