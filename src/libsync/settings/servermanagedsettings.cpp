@@ -11,7 +11,8 @@ namespace OCC {
 
 namespace {
 // Keys the client accepts from the server and whether each is server enforceable.
-// Update and proxy keys are enforceable by request; device policy still wins.
+// Update and proxy keys are default only from the server; only device policy
+// enforces them, so a server cannot disable updates or reroute traffic.
 struct ServerKeyPolicy {
     bool serverEnforceable = false;
 };
@@ -19,12 +20,12 @@ struct ServerKeyPolicy {
 const QHash<QString, ServerKeyPolicy> &acceptedServerKeys()
 {
     static const QHash<QString, ServerKeyPolicy> keys = {
-        {QStringLiteral("skipUpdateCheck"), {true}},
-        {QStringLiteral("autoUpdateCheck"), {true}},
+        {QStringLiteral("skipUpdateCheck"), {false}},
+        {QStringLiteral("autoUpdateCheck"), {false}},
         {QStringLiteral("virtualFilesMode"), {true}},
-        {QStringLiteral("proxyHost"), {true}},
-        {QStringLiteral("proxyPort"), {true}},
-        {QStringLiteral("proxyType"), {true}},
+        {QStringLiteral("proxyHost"), {false}},
+        {QStringLiteral("proxyPort"), {false}},
+        {QStringLiteral("proxyType"), {false}},
         {QStringLiteral("newBigFolderSizeLimit"), {true}},
         {QStringLiteral("confirmExternalStorage"), {true}},
         {QStringLiteral("useNewBigFolderSizeLimit"), {true}},

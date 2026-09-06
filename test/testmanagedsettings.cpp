@@ -329,27 +329,30 @@ private slots:
 
     void testServerEnforcedEnforcedOverUserButDevicePolicyWins()
     {
+        // virtualFilesMode stays server enforceable, so it survives sanitize.
         ServerManagedSettings raw;
-        raw.enforced = QVariantMap{{QStringLiteral("skipUpdateCheck"), true}};
+        raw.enforced = QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("onlineOnly")}};
         const auto clean = sanitizeServerManagedSettings(raw);
+
+        const SettingSpec spec{QStringLiteral("virtualFilesMode"), QStringLiteral(""), true, SettingScope::User};
 
         ManagedSettings resolver;
         resolver.addSource(std::make_unique<MapSource>(SettingSourceKind::UserConfig, EnforcementState::NotEnforced, 50,
-            QVariantMap{{QStringLiteral("skipUpdateCheck"), false}}));
+            QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("off")}}));
         for (auto &source : buildServerSources(clean)) {
             resolver.addSource(std::move(source));
         }
 
         // Server enforced beats the user config.
-        const auto withoutDevice = resolver.resolve(skipSpec());
-        QCOMPARE(withoutDevice.value.toBool(), true);
+        const auto withoutDevice = resolver.resolve(spec);
+        QCOMPARE(withoutDevice.value.toString(), QStringLiteral("onlineOnly"));
         QCOMPARE(withoutDevice.source, SettingSourceKind::ServerEnforced);
 
         // Device policy still beats server enforced.
         resolver.addSource(std::make_unique<MapSource>(SettingSourceKind::PlatformPolicy, EnforcementState::Enforced, 200,
-            QVariantMap{{QStringLiteral("skipUpdateCheck"), false}}));
-        const auto withDevice = resolver.resolve(skipSpec());
-        QCOMPARE(withDevice.value.toBool(), false);
+            QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("off")}}));
+        const auto withDevice = resolver.resolve(spec);
+        QCOMPARE(withDevice.value.toString(), QStringLiteral("off"));
         QCOMPARE(withDevice.source, SettingSourceKind::PlatformPolicy);
     }
 
@@ -462,6 +465,21 @@ private slots:
         // Dropping the cache reparses from the config file, proving persistence.
         ManagedConfig::instance().invalidate();
         QCOMPARE(config.serverManagedSettings().enforced.value(QStringLiteral("skipUpdateCheck")).toBool(), true);
+    }
+
+    void testSanitizeDropsServerEnforcedUpdateAndProxyKeys()
+    {
+        ServerManagedSettings raw;
+        raw.enforced = QVariantMap{{QStringLiteral("skipUpdateCheck"), true},
+            {QStringLiteral("proxyHost"), QStringLiteral("evil.example.com")},
+            {QStringLiteral("virtualFilesMode"), QStringLiteral("onlineOnly")}};
+
+        const auto clean = sanitizeServerManagedSettings(raw);
+
+        // A server cannot enforce updates or proxy; only device policy can.
+        QVERIFY(!clean.enforced.contains(QStringLiteral("skipUpdateCheck")));
+        QVERIFY(!clean.enforced.contains(QStringLiteral("proxyHost")));
+        QVERIFY(clean.enforced.contains(QStringLiteral("virtualFilesMode")));
     }
 };
 
