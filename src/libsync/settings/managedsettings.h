@@ -68,8 +68,43 @@ public:
     [[nodiscard]] virtual int priority() const = 0;
 };
 
-// Resolves the effective value of a setting: locked policy, then user config,
-// then the highest default, then the builtin default.
+/**
+ * How a managed setting is resolved (e.g. skipUpdateCheck):
+ *
+ * config.php (admin)                                     [server, optional]
+ *   |
+ *   support app Capabilities::getCapabilities
+ *   |   allow-list filter, enterprise subscription gate
+ *   |
+ *   OCS: support.desktopClient { defaults, locked }
+ *   |
+ * Account::setCapabilities                               [client]
+ *   |
+ *   Account::updateServerManagedSettings
+ *   |   Capabilities::desktopClientManagedSettings -> parseServerManagedSettings
+ *   |   sanitizeServerManagedSettings  (client allow-list, drops non lockable)
+ *   |
+ *   AccountManager::updateServerManagedSettings
+ *   |   merge subscribed accounts (the subscribed account wins)
+ *   |
+ *   ConfigFile::setServerManagedSettings   (JSON in .cfg, offline cache)
+ *   |
+ * ConfigFile::skipUpdateCheck / autoUpdateCheck          [read]
+ *   |
+ *   ConfigFile::resolveManagedBool
+ *     |   add the sources for this key:
+ *     |-- buildDeviceSources()   Windows GP / macOS forced (locked), OS default
+ *     |-- UserConfigSource       the user .cfg
+ *     |-- buildServerSources()   server locked, server default
+ *     |
+ *     ManagedSettings::resolve(spec)
+ *       |   highest precedence level wins, ties broken by source priority:
+ *       |
+ *       device locked (200) > server locked (100) > user (50)
+ *                           > server default (30) > device default (20) > builtin
+ *       |
+ *   ManagedValue { value, source, locked/default }       [return]
+ */
 class OWNCLOUDSYNC_EXPORT ManagedSettings
 {
 public:
