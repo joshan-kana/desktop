@@ -18,40 +18,7 @@
 
 namespace OCC {
 
-/**
- * Server delivered managed settings: from the admin's config.php to a source the
- * resolver can read. See ManagedSettings for the full resolution flow.
- *
- * [server, support app]                     (separate repo, enterprise gated)
- *   config.php: desktopclient.defaults / .enforced
- *     |
- *   DesktopClientSettingsService   allow list, never secrets
- *     |
- *   Capabilities: support.desktopClient { schemaVersion, defaults, enforced }
- *     |
- *   OCS  /cloud/capabilities
- *     |
- * [client]
- *   Account::setCapabilities
- *     |
- *   Capabilities::desktopClientManagedSettings
- *     |   parseServerManagedSettings   (capability map into ServerManagedSettings)
- *     |
- *   sanitizeServerManagedSettings
- *     |   client allow list: drop unknown keys,
- *     |   keep only server enforceable keys in enforced
- *     |
- *   AccountManager::updateServerManagedSettings
- *     |   merge subscribed accounts, the subscribed account wins
- *     |
- *   ConfigFile::setServerManagedSettings   (JSON in .cfg, offline cache)
- *     |
- *   buildServerSources
- *     |   ServerSettingsSource  enforced    (ServerEnforced, priority 100)
- *     |   ServerSettingsSource  defaults  (ServerDefault, priority 30)
- *     |
- *   [added to the resolver by ConfigFile::resolveManagedBool]
- */
+// Server delivery flow: see README.md
 
 // Managed settings delivered by the server through the support.desktopClient
 // capability. defaults are suggestions; enforced values cannot be changed.

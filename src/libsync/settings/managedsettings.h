@@ -23,8 +23,8 @@ enum class SettingSourceKind {
     PlatformDefault,
     UserConfig,
     PlatformPolicy,
-    ServerDefault, // phase 2
-    ServerEnforced, // phase 2
+    ServerDefault,
+    ServerEnforced,
 };
 
 enum class EnforcementState {
@@ -68,43 +68,7 @@ public:
     [[nodiscard]] virtual int priority() const = 0;
 };
 
-/**
- * How a managed setting is resolved (e.g. skipUpdateCheck):
- *
- * config.php (admin)                                     [server, optional]
- *   |
- *   support app Capabilities::getCapabilities
- *   |   allow list filter, enterprise subscription gate
- *   |
- *   OCS: support.desktopClient { defaults, enforced }
- *   |
- * Account::setCapabilities                               [client]
- *   |
- *   Account::updateServerManagedSettings
- *   |   Capabilities::desktopClientManagedSettings then parseServerManagedSettings
- *   |   sanitizeServerManagedSettings  (client allow list, drops non enforceable)
- *   |
- *   AccountManager::updateServerManagedSettings
- *   |   merge subscribed accounts (the subscribed account wins)
- *   |
- *   ConfigFile::setServerManagedSettings   (JSON in .cfg, offline cache)
- *   |
- * ConfigFile::skipUpdateCheck / autoUpdateCheck          [read]
- *   |
- *   ConfigFile::resolveManagedBool
- *     |   add the sources for this key:
- *     |   buildDeviceSources()   Windows GP / macOS forced (enforced), OS default
- *     |   UserConfigSource       the user .cfg
- *     |   buildServerSources()   server enforced, server default
- *     |
- *     ManagedSettings::resolve(spec)
- *       |   highest precedence level wins, ties broken by source priority:
- *       |
- *       device enforced (200) > server enforced (100) > user (50)
- *                           > server default (30) > device default (20) > builtin
- *       |
- *   ManagedValue { value, source, enforced/default }       [return]
- */
+// Resolution and delivery flow: see README.md
 class OWNCLOUDSYNC_EXPORT ManagedSettings
 {
 public:
