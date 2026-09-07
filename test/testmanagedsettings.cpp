@@ -86,7 +86,7 @@ class TestManagedSettings : public QObject
         return {QStringLiteral("skipUpdateCheck"), false, true, SettingScope::User};
     }
 
-private slots:
+private Q_SLOTS:
     void initTestCase()
     {
         QStandardPaths::setTestModeEnabled(true);
