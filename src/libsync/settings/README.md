@@ -75,6 +75,10 @@ stopSyncingExistingFoldersOverLimit. The last two carry a runtime or theme
 default, so they are resolved with a runtime default at the call site and are not
 in the schema.
 
+Proxy resolves through getConfig as well, wrapped in
+ConfigFile::managedProxySettings, which reads proxyType, proxyHost and proxyPort
+together so the type, host and port are always managed as one tuple.
+
 Legacy keys are stored at the top level of the .cfg while managed writes use the
 account group, so getConfig reads both: the account group at priority 50 and the
 top level at 49, the group value winning when both exist.
@@ -82,20 +86,24 @@ top level at 49, the group value winning when both exist.
 Server delivered values are range checked in sanitizeServerManagedSettings (the
 folder size limit); invalid values are dropped.
 
-Setters refuse an enforced write: the folder limit setters go through setConfig. UI
-enforcement (disable and label) covers the update control and the folder limit
-controls (advancedsettings).
+Setters refuse an enforced write: the folder limit setters go through setConfig and
+Account::setProxySettings refuses a managed proxy write. UI enforcement (disable and
+label) covers the update control, the folder limit controls (advancedsettings) and
+the proxy editor (networksettings).
+
+Proxy unifies the two layers. The network dialog edits per account state (Account)
+while the resolver reads the managed proxy keys, so managedProxySettings resolves
+type, host and port as one tuple and AccountManager applies it at account load: an
+enforced value always wins, a default only when the account follows the system
+proxy. Account::proxySettingsAreManaged is set when the proxy is enforced,
+Account::setProxySettings refuses a write while managed, and NetworkSettings
+disables the editor and shows the managed label. Any enforced field disables the
+whole editor, but only the managed fields replace values, so an account keeps its
+own value for the rest. The server can only default the proxy, never enforce it, so
+an enforced proxy always comes from device policy.
 
 Not yet wired: virtualFilesMode is per folder (FolderDefinition), not a ConfigFile
 accessor, so it needs folder wizard work.
-
-Proxy is deferred on purpose. The network dialog edits per account state
-(Account), while the resolver reads the global ConfigFile proxy, so the two layers
-must be unified first. The plan: a ConfigFile::managedProxySettings() that resolves
-the whole proxy tuple (type, host, port) atomically, applied at account load, with
-Account::proxySettingsAreManaged() and a write guard in Account::setProxySettings,
-and NetworkSettings disabling the editor from that account state. Enforcing only
-one proxy field must not leave the others editable.
 
 ## Scope
 
