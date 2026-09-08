@@ -931,6 +931,8 @@ void AccountManager::addAccountState(AccountState *const accountState)
 
     QObject::connect(accountState->account().data(), &Account::wantsAccountSaved, this, &AccountManager::saveAccount);
     QObject::connect(accountState->account().data(), &Account::capabilitiesChanged, this, &AccountManager::capabilitiesChanged);
+    // Re-merge and persist managed settings whenever capabilities change, not only on add or remove.
+    QObject::connect(accountState->account().data(), &Account::capabilitiesChanged, this, &AccountManager::updateServerManagedSettings);
 
     AccountStatePtr ptr(accountState);
     _accounts << ptr;
