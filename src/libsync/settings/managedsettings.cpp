@@ -9,13 +9,13 @@ namespace OCC {
 
 namespace {
 // Higher tier always wins; within a tier the higher source priority wins.
-int tierOf(const EnforcementState enforcement, const SettingSourceKind kind)
+int tierOf(const EnforcementState enforcement, const SettingSourceType kind)
 {
     switch (enforcement) {
     case EnforcementState::Enforced:
         return 2;
     case EnforcementState::NotEnforced:
-        return kind == SettingSourceKind::UserConfig ? 1 : 0;
+        return kind == SettingSourceType::UserConfig ? 1 : 0;
     }
     return 0;
 }
@@ -44,7 +44,7 @@ ManagedValue ManagedSettings::resolve(const SettingSpec &spec, const QString &gr
         if (!value.has_value()) {
             continue;
         }
-        const auto tier = tierOf(enforcement, source->kind());
+        const auto tier = tierOf(enforcement, source->type());
         const auto priority = source->priority();
         if (tier > winnerTier || (tier == winnerTier && priority > winnerPriority)) {
             winner = source.get();
@@ -55,13 +55,13 @@ ManagedValue ManagedSettings::resolve(const SettingSpec &spec, const QString &gr
     }
 
     if (!winner) {
-        return {spec.key, spec.builtinDefault, SettingSourceKind::BuiltinDefault, EnforcementState::NotEnforced, false};
+        return {spec.key, spec.builtinDefault, SettingSourceType::BuiltinDefault, EnforcementState::NotEnforced, false};
     }
     // Convert to the schema declared type, which builtinDefault carries.
     if (spec.builtinDefault.isValid()) {
         winnerValue.convert(spec.builtinDefault.metaType());
     }
-    return {spec.key, winnerValue, winner->kind(), winner->enforcement(), true};
+    return {spec.key, winnerValue, winner->type(), winner->enforcement(), true};
 }
 
 QList<ManagedValue> ManagedSettings::resolveAll(const QList<SettingSpec> &specs, const QString &group) const

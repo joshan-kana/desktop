@@ -48,7 +48,7 @@ getConfig is its single read entry point.
 
     // UI helpers.
     bool isEnforced(name, group = {}) const;             // true means disable the control
-    SettingSourceKind sourceOf(name, group = {}) const;  // for the "Managed by ..." label
+    SettingSourceType sourceOf(name, group = {}) const;  // for the "Managed by ..." label
 
 ## Behavior
 

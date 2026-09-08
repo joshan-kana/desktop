@@ -65,7 +65,7 @@ ServerManagedSettings sanitizeServerManagedSettings(const ServerManagedSettings 
     return clean;
 }
 
-ServerSettingsSource::ServerSettingsSource(QVariantMap values, SettingSourceKind kind, EnforcementState enforcement, int priority)
+ServerSettingsSource::ServerSettingsSource(QVariantMap values, SettingSourceType kind, EnforcementState enforcement, int priority)
     : _values(std::move(values))
     , _kind(kind)
     , _enforcement(enforcement)
@@ -81,7 +81,7 @@ std::optional<QVariant> ServerSettingsSource::read(const QString &key, const QSt
     return _values.value(key);
 }
 
-SettingSourceKind ServerSettingsSource::kind() const
+SettingSourceType ServerSettingsSource::type() const
 {
     return _kind;
 }
@@ -100,12 +100,10 @@ std::vector<std::unique_ptr<SettingSource>> buildServerSources(const ServerManag
 {
     std::vector<std::unique_ptr<SettingSource>> sources;
     if (!sanitized.enforced.isEmpty()) {
-        sources.push_back(std::make_unique<ServerSettingsSource>(
-            sanitized.enforced, SettingSourceKind::ServerEnforced, EnforcementState::Enforced, 100));
+        sources.push_back(std::make_unique<ServerSettingsSource>(sanitized.enforced, SettingSourceType::ServerEnforced, EnforcementState::Enforced, 100));
     }
     if (!sanitized.defaults.isEmpty()) {
-        sources.push_back(std::make_unique<ServerSettingsSource>(
-            sanitized.defaults, SettingSourceKind::ServerDefault, EnforcementState::NotEnforced, 30));
+        sources.push_back(std::make_unique<ServerSettingsSource>(sanitized.defaults, SettingSourceType::ServerDefault, EnforcementState::NotEnforced, 30));
     }
     return sources;
 }

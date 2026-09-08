@@ -39,16 +39,16 @@ struct ServerManagedSettings {
 class OWNCLOUDSYNC_EXPORT ServerSettingsSource : public SettingSource
 {
 public:
-    ServerSettingsSource(QVariantMap values, SettingSourceKind kind, EnforcementState enforcement, int priority);
+    ServerSettingsSource(QVariantMap values, SettingSourceType kind, EnforcementState enforcement, int priority);
 
     [[nodiscard]] std::optional<QVariant> read(const QString &key, const QString &group) const override;
-    [[nodiscard]] SettingSourceKind kind() const override;
+    [[nodiscard]] SettingSourceType type() const override;
     [[nodiscard]] EnforcementState enforcement() const override;
     [[nodiscard]] int priority() const override;
 
 private:
     QVariantMap _values;
-    SettingSourceKind _kind;
+    SettingSourceType _kind;
     EnforcementState _enforcement;
     int _priority;
 };

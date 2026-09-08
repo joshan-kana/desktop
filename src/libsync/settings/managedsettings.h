@@ -18,7 +18,7 @@
 
 namespace OCC {
 
-enum class SettingSourceKind {
+enum class SettingSourceType {
     BuiltinDefault,
     PlatformDefault,
     UserConfig,
@@ -42,7 +42,7 @@ enum class SettingScope {
 struct ManagedValue {
     QString key;
     QVariant value;
-    SettingSourceKind source = SettingSourceKind::BuiltinDefault;
+    SettingSourceType source = SettingSourceType::BuiltinDefault;
     EnforcementState enforcement = EnforcementState::NotEnforced;
     bool present = false; // false when only the builtin default applied
 
@@ -61,9 +61,8 @@ class OWNCLOUDSYNC_EXPORT SettingSource
 public:
     virtual ~SettingSource();
 
-    // std::nullopt means the source does not define key.
     [[nodiscard]] virtual std::optional<QVariant> read(const QString &key, const QString &group) const = 0;
-    [[nodiscard]] virtual SettingSourceKind kind() const = 0;
+    [[nodiscard]] virtual SettingSourceType type() const = 0;
     [[nodiscard]] virtual EnforcementState enforcement() const = 0;
     [[nodiscard]] virtual int priority() const = 0;
 };
