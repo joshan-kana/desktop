@@ -16,12 +16,10 @@ void ManagedSettings::addSource(std::unique_ptr<SettingSource> source)
 
 ManagedValue ManagedSettings::resolve(const SettingSpec &spec, const QString &group) const
 {
-    // The highest priority source that provides a value wins. Priorities encode the
-    // precedence: device policy > server enforced > user > server default > device default.
-    const SettingSource *best = nullptr;
-    QVariant bestValue;
-    auto bestPriority = -1;
-
+    // Priorities encode the precedence: device policy > server enforced > user > server default > device default.
+    const SettingSource *settingSource = nullptr;
+    QVariant settingValue;
+    auto settingPriority = -1;
     for (const auto &source : _sources) {
         if (source->enforcement() == EnforcementState::Enforced && !spec.enforceable) {
             continue;
@@ -31,21 +29,22 @@ ManagedValue ManagedSettings::resolve(const SettingSpec &spec, const QString &gr
             continue;
         }
         const auto priority = source->priority();
-        if (priority > bestPriority) {
-            best = source.get();
-            bestValue = *value;
-            bestPriority = priority;
+        if (priority > settingPriority) {
+            settingSource = source.get();
+            settingValue = *value;
+            settingPriority = priority;
         }
     }
 
-    if (!best) {
+    if (!settingSource) {
         return {spec.key, spec.builtinDefault, SettingSourceType::BuiltinDefault, EnforcementState::NotEnforced, false};
     }
-    // Convert to the schema declared type, which builtinDefault carries.
+
     if (spec.builtinDefault.isValid()) {
-        bestValue.convert(spec.builtinDefault.metaType());
+        settingValue.convert(spec.builtinDefault.metaType());
     }
-    return {spec.key, bestValue, best->type(), best->enforcement(), true};
+
+    return {spec.key, settingValue, settingSource->type(), settingSource->enforcement(), true};
 }
 
 QList<ManagedValue> ManagedSettings::resolveAll(const QList<SettingSpec> &specs, const QString &group) const
