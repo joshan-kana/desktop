@@ -197,7 +197,7 @@ void Systray::showWindow(WindowPosition position)
 {
     Q_UNUSED(position)
 
-    showActivitiesWindow();
+    Q_EMIT openSettings();
 }
 
 void Systray::showTrayPopup(WindowPosition position)
@@ -207,7 +207,7 @@ void Systray::showTrayPopup(WindowPosition position)
     }
 
     if (!isSystemTrayAvailable()) {
-        showActivitiesWindow();
+        showWindow(position);
         return;
     }
 

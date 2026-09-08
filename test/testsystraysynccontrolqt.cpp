@@ -45,6 +45,16 @@ private Q_SLOTS:
         _helper.cleanup();
     }
 
+    void defaultWindowRequestsSettings()
+    {
+        const auto systray = Systray::instance();
+        const auto settingsRequest = QSignalSpy(systray, &Systray::openSettings);
+
+        systray->showWindow();
+
+        QCOMPARE_EQ(settingsRequest.count(), 1);
+    }
+
     void globalActionIsHiddenWithoutClassicFoldersAndTogglesAllFolders()
     {
         const auto systray = Systray::instance();
