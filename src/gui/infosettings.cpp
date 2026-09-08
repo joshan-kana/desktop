@@ -57,6 +57,11 @@ InfoSettings::InfoSettings(QWidget *parent)
     _ui->autoCheckForUpdatesLabel->setWordWrap(true);
     _ui->autoCheckForUpdatesLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     _ui->updateControlsRow->setStretch(0, 1);
+    // keeps it proportional to the inherited font depending on the platform
+    auto hintFont = _ui->adminEnforcedLabel->font();
+    hintFont.setItalic(true);
+    hintFont.setPointSizeF(hintFont.pointSizeF() * 0.9);
+    _ui->adminEnforcedLabel->setFont(hintFont); // managed settings label
 #endif
 
     connect(_ui->legalNoticeButton, &QPushButton::clicked, this, &InfoSettings::slotShowLegalNotice);
@@ -131,15 +136,15 @@ void InfoSettings::slotUpdateInfo()
         // Disabled and label when an administrator enforces the value
         const auto enforced = config.isEnforced(QLatin1String(ConfigFile::autoUpdateCheckC));
         _ui->autoCheckForUpdatesCheckBox->setChecked(config.autoUpdateCheck());
-        _ui->autoCheckForUpdatesCheckBox->setEnabled(!enforced);
         _ui->updateButton->setEnabled(!enforced);
+        _ui->adminEnforcedLabel->setVisible(enforced);
         if (!enforced) {
             // clicked fires only on user interaction, so repopulating the control never writes a user value.
             connect(_ui->autoCheckForUpdatesCheckBox, &QAbstractButton::clicked, this, &InfoSettings::slotToggleAutoUpdateCheck, Qt::UniqueConnection);
         } else {
-            _ui->autoCheckForUpdatesCheckBox->setToolTip(config.sourceOf(QLatin1String(ConfigFile::autoUpdateCheckC)) == SettingSourceType::ServerEnforced
-                                                             ? tr("Managed by your organization")
-                                                             : tr("Managed by your system administrator"));
+            const auto source = config.sourceOf(QLatin1String(ConfigFile::autoUpdateCheckC));
+            _ui->adminEnforcedLabel->setText(source == SettingSourceType::ServerEnforced ? tr("Managed by your organization")
+                                                                                         : tr("Managed by your system administrator"));
         }
     }
 
