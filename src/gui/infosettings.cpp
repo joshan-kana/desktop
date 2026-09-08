@@ -132,6 +132,7 @@ void InfoSettings::slotUpdateInfo()
         const auto enforced = config.isEnforced(QLatin1String(ConfigFile::autoUpdateCheckC));
         _ui->autoCheckForUpdatesCheckBox->setChecked(config.autoUpdateCheck());
         _ui->autoCheckForUpdatesCheckBox->setEnabled(!enforced);
+        _ui->updateButton->setEnabled(!enforced);
         if (!enforced) {
             // clicked fires only on user interaction, so repopulating the control never writes a user value.
             connect(_ui->autoCheckForUpdatesCheckBox, &QAbstractButton::clicked, this, &InfoSettings::slotToggleAutoUpdateCheck, Qt::UniqueConnection);
