@@ -18,9 +18,9 @@ ManagedValue ManagedSettings::resolve(const SettingSpec &spec, const QString &gr
 {
     // The highest priority source that provides a value wins. Priorities encode the
     // precedence: device policy > server enforced > user > server default > device default.
-    const SettingSource *winner = nullptr;
-    QVariant winnerValue;
-    auto winnerPriority = -1;
+    const SettingSource *best = nullptr;
+    QVariant bestValue;
+    auto bestPriority = -1;
 
     for (const auto &source : _sources) {
         if (source->enforcement() == EnforcementState::Enforced && !spec.enforceable) {
@@ -31,21 +31,21 @@ ManagedValue ManagedSettings::resolve(const SettingSpec &spec, const QString &gr
             continue;
         }
         const auto priority = source->priority();
-        if (priority > winnerPriority) {
-            winner = source.get();
-            winnerValue = *value;
-            winnerPriority = priority;
+        if (priority > bestPriority) {
+            best = source.get();
+            bestValue = *value;
+            bestPriority = priority;
         }
     }
 
-    if (!winner) {
+    if (!best) {
         return {spec.key, spec.builtinDefault, SettingSourceType::BuiltinDefault, EnforcementState::NotEnforced, false};
     }
     // Convert to the schema declared type, which builtinDefault carries.
     if (spec.builtinDefault.isValid()) {
-        winnerValue.convert(spec.builtinDefault.metaType());
+        bestValue.convert(spec.builtinDefault.metaType());
     }
-    return {spec.key, winnerValue, winner->type(), winner->enforcement(), true};
+    return {spec.key, bestValue, best->type(), best->enforcement(), true};
 }
 
 QList<ManagedValue> ManagedSettings::resolveAll(const QList<SettingSpec> &specs, const QString &group) const
