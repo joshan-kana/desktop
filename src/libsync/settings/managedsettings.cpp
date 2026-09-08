@@ -7,20 +7,6 @@
 
 namespace OCC {
 
-namespace {
-// Higher tier always wins; within a tier the higher source priority wins.
-int tierOf(const EnforcementState enforcement, const SettingSourceType kind)
-{
-    switch (enforcement) {
-    case EnforcementState::Enforced:
-        return 2;
-    case EnforcementState::NotEnforced:
-        return kind == SettingSourceType::UserConfig ? 1 : 0;
-    }
-    return 0;
-}
-}
-
 SettingSource::~SettingSource() = default;
 
 void ManagedSettings::addSource(std::unique_ptr<SettingSource> source)
@@ -30,26 +16,24 @@ void ManagedSettings::addSource(std::unique_ptr<SettingSource> source)
 
 ManagedValue ManagedSettings::resolve(const SettingSpec &spec, const QString &group) const
 {
+    // The highest priority source that provides a value wins. Priorities encode the
+    // precedence: device policy > server enforced > user > server default > device default.
     const SettingSource *winner = nullptr;
     QVariant winnerValue;
-    auto winnerTier = -1;
-    auto winnerPriority = 0;
+    auto winnerPriority = -1;
 
     for (const auto &source : _sources) {
-        const auto enforcement = source->enforcement();
-        if (enforcement == EnforcementState::Enforced && !spec.enforceable) {
+        if (source->enforcement() == EnforcementState::Enforced && !spec.enforceable) {
             continue;
         }
         const auto value = source->read(spec.key, group);
         if (!value.has_value()) {
             continue;
         }
-        const auto tier = tierOf(enforcement, source->type());
         const auto priority = source->priority();
-        if (tier > winnerTier || (tier == winnerTier && priority > winnerPriority)) {
+        if (priority > winnerPriority) {
             winner = source.get();
             winnerValue = *value;
-            winnerTier = tier;
             winnerPriority = priority;
         }
     }

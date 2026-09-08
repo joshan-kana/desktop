@@ -126,7 +126,7 @@ ConfigFile::getConfig                                  [read]
   |   buildServerSources()   server enforced, server default
   |
   ManagedSettings::resolve(spec)
-  |   highest precedence level wins, ties broken by source priority:
+  |   the highest priority source that has a value wins:
   |
   device enforced (200) > server enforced (100) > user (50)
                       > server default (30) > device default (20) > builtin
