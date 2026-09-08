@@ -14,8 +14,8 @@ below, and migration, documented in MIGRATION.md.
 
 Issue #5497 introduced a managed settings resolver so a setting can be resolved
 across device enforced policy, server enforced policy, user config, server
-defaults, device defaults and the builtin default. Update, proxy and folder limit
-keys now resolve through ConfigFile::getConfig. The remaining settings are still
+defaults, device defaults and the builtin default. Update, proxy, folder limit and
+virtual files keys now resolve through ConfigFile::getConfig. The remaining settings are still
 read with ConfigFile::getValue (OS default plus user config only),
 ConfigFile::getPolicySetting (Windows policy overlay) or raw QSettings, and are
 migrated onto getConfig as they are onboarded into the schema.
@@ -79,6 +79,13 @@ Proxy resolves through getConfig as well, wrapped in
 ConfigFile::managedProxySettings, which reads proxyType, proxyHost and proxyPort
 together so the type, host and port are always managed as one tuple.
 
+virtualFilesMode resolves through ConfigFile::managedVirtualFilesMode. It is per
+folder (FolderDefinition), so the value is applied where a new folder is created:
+the add folder wizard preselects and, when enforced, disables the virtual files
+checkbox, and the account setup wizard forces or hides the virtual files sync mode
+the same way. The server may enforce it, so an enforced value can come from the
+server or from device policy.
+
 Legacy keys are stored at the top level of the .cfg while managed writes use the
 account group, so getConfig reads both: the account group at priority 50 and the
 top level at 49, the group value winning when both exist.
@@ -101,9 +108,6 @@ disables the editor and shows the managed label. Any enforced field disables the
 whole editor, but only the managed fields replace values, so an account keeps its
 own value for the rest. The server can only default the proxy, never enforce it, so
 an enforced proxy always comes from device policy.
-
-Not yet wired: virtualFilesMode is per folder (FolderDefinition), not a ConfigFile
-accessor, so it needs folder wizard work.
 
 ## Scope
 
