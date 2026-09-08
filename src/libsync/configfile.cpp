@@ -716,7 +716,7 @@ bool ConfigFile::isEnforced(const QString &name, const QString &connectionGroupN
     return getConfig(name, {}, connectionGroupName).isEnforced();
 }
 
-SettingSourceKind ConfigFile::sourceOf(const QString &name, const QString &connectionGroupName) const
+SettingSourceType ConfigFile::sourceOf(const QString &name, const QString &connectionGroupName) const
 {
     return getConfig(name, {}, connectionGroupName).source;
 }
