@@ -134,7 +134,7 @@ std::vector<std::unique_ptr<SettingSource>> buildDeviceSources()
                                                SettingSourceType::PlatformDefault,
                                                EnforcementState::NotEnforced,
                                                20));
-#elif defined(Q_OS_MAC)
+#elif defined(Q_OS_MACOS)
     // A key counts as enforced only when the MDM profile forces it, resolved through
     // CFPreferences so both host and per user managed preferences are honored.
     sources.push_back(std::make_unique<MacForcedPreferenceSource>(

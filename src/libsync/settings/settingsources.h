@@ -68,7 +68,7 @@ private:
     int _priority;
 };
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 // Reads macOS managed preferences for an application domain, treating a key as
 // enforced only when CFPreferencesAppValueIsForced reports it forced.
 class OWNCLOUDSYNC_EXPORT MacForcedPreferenceSource : public ForcedPreferenceSource
