@@ -133,7 +133,8 @@ void InfoSettings::slotUpdateInfo()
         _ui->autoCheckForUpdatesCheckBox->setChecked(config.autoUpdateCheck());
         _ui->autoCheckForUpdatesCheckBox->setEnabled(!enforced);
         if (!enforced) {
-            connect(_ui->autoCheckForUpdatesCheckBox, &QAbstractButton::toggled, this, &InfoSettings::slotToggleAutoUpdateCheck, Qt::UniqueConnection);
+            // clicked fires only on user interaction, so repopulating the control never writes a user value.
+            connect(_ui->autoCheckForUpdatesCheckBox, &QAbstractButton::clicked, this, &InfoSettings::slotToggleAutoUpdateCheck, Qt::UniqueConnection);
         } else {
             _ui->autoCheckForUpdatesCheckBox->setToolTip(config.sourceOf(QLatin1String(ConfigFile::autoUpdateCheckC)) == SettingSourceType::ServerEnforced
                                                              ? tr("Managed by your organization")
