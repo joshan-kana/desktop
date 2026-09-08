@@ -126,27 +126,19 @@ void InfoSettings::slotUpdateInfo()
     _ui->updatesContainer->setVisible(true);
 
     if (updater) {
-        connect(_ui->updateButton,
-                &QAbstractButton::clicked,
-                this,
-                &InfoSettings::slotUpdateCheckNow,
-                Qt::UniqueConnection);
-        connect(_ui->autoCheckForUpdatesCheckBox, &QAbstractButton::toggled, this,
-                &InfoSettings::slotToggleAutoUpdateCheck, Qt::UniqueConnection);
-        // Blocked so populating the control does not write it back to the config.
-        {
-            const QSignalBlocker blocker(_ui->autoCheckForUpdatesCheckBox);
-            _ui->autoCheckForUpdatesCheckBox->setChecked(config.autoUpdateCheck());
-        }
+        connect(_ui->updateButton, &QAbstractButton::clicked, this, &InfoSettings::slotUpdateCheckNow, Qt::UniqueConnection);
 
-        // Disabled and labelled when an administrator enforces the value.
+        // Disabled and label when an administrator enforces the value
         const auto enforced = config.isEnforced(QLatin1String(ConfigFile::autoUpdateCheckC));
+        _ui->autoCheckForUpdatesCheckBox->setChecked(config.autoUpdateCheck());
         _ui->autoCheckForUpdatesCheckBox->setEnabled(!enforced);
-        _ui->autoCheckForUpdatesCheckBox->setToolTip(enforced
-                ? (config.sourceOf(QLatin1String(ConfigFile::autoUpdateCheckC)) == SettingSourceKind::ServerEnforced
-                          ? tr("Managed by your organization")
-                          : tr("Managed by your system administrator"))
-                : QString());
+        if (!enforced) {
+            connect(_ui->autoCheckForUpdatesCheckBox, &QAbstractButton::toggled, this, &InfoSettings::slotToggleAutoUpdateCheck, Qt::UniqueConnection);
+        } else {
+            _ui->autoCheckForUpdatesCheckBox->setToolTip(config.sourceOf(QLatin1String(ConfigFile::autoUpdateCheckC)) == SettingSourceType::ServerEnforced
+                                                             ? tr("Managed by your organization")
+                                                             : tr("Managed by your system administrator"));
+        }
     }
 
     const auto ocupdater = qobject_cast<OCUpdater *>(updater);
