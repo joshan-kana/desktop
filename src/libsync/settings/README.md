@@ -14,14 +14,15 @@ below, and migration, documented in MIGRATION.md.
 
 Issue #5497 introduced a managed settings resolver so a setting can be resolved
 across device enforced policy, server enforced policy, user config, server
-defaults, device defaults and the builtin default. Today only skipUpdateCheck and
-autoUpdateCheck go through it (via ConfigFile::getConfig). Every other
-setting is still read with ConfigFile::getValue (OS default plus user config
-only), ConfigFile::getPolicySetting (Windows policy overlay) or raw QSettings.
+defaults, device defaults and the builtin default. Update, proxy and folder limit
+keys now resolve through ConfigFile::getConfig. The remaining settings are still
+read with ConfigFile::getValue (OS default plus user config only),
+ConfigFile::getPolicySetting (Windows policy overlay) or raw QSettings, and are
+migrated onto getConfig as they are onboarded into the schema.
 
-Those three read paths skip the enforcement hierarchy. Any setting read through
-them cannot be enforced by an administrator. To make every setting manageable we
-need one enforcement aware read path that all config access flows through.
+Those read paths skip the enforcement hierarchy, so a setting read through them
+cannot be enforced by an administrator. getConfig is the single enforcement aware
+read path.
 
 ## Principle
 
@@ -65,6 +66,36 @@ getConfig is its single read entry point.
   settings are disabled, never hidden; a server default stays editable.
 - Update and proxy keys are default only from the server. Only device policy can
   enforce them, so a server cannot disable updates or reroute traffic.
+
+## Managed keys
+
+Wired through getConfig: skipUpdateCheck, autoUpdateCheck, confirmExternalStorage,
+useNewBigFolderSizeLimit, notifyExistingFoldersOverLimit, newBigFolderSizeLimit,
+stopSyncingExistingFoldersOverLimit. The last two carry a runtime or theme
+default, so they are resolved with a runtime default at the call site and are not
+in the schema.
+
+Legacy keys are stored at the top level of the .cfg while managed writes use the
+account group, so getConfig reads both: the account group at priority 50 and the
+top level at 49, the group value winning when both exist.
+
+Server delivered values are range checked in sanitizeServerManagedSettings (the
+folder size limit); invalid values are dropped.
+
+Setters refuse an enforced write: the folder limit setters go through setConfig. UI
+enforcement (disable and label) covers the update control and the folder limit
+controls (advancedsettings).
+
+Not yet wired: virtualFilesMode is per folder (FolderDefinition), not a ConfigFile
+accessor, so it needs folder wizard work.
+
+Proxy is deferred on purpose. The network dialog edits per account state
+(Account), while the resolver reads the global ConfigFile proxy, so the two layers
+must be unified first. The plan: a ConfigFile::managedProxySettings() that resolves
+the whole proxy tuple (type, host, port) atomically, applied at account load, with
+Account::proxySettingsAreManaged() and a write guard in Account::setProxySettings,
+and NetworkSettings disabling the editor from that account state. Enforcing only
+one proxy field must not leave the others editable.
 
 ## Scope
 
