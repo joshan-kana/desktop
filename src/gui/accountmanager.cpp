@@ -823,6 +823,7 @@ void AccountManager::updateServerManagedSettings()
             continue;
         }
         const auto accountSettings = account->account()->serverManagedSettings();
+        merged.schemaVersion = qMax(merged.schemaVersion, accountSettings.schemaVersion);
         for (const auto &[key, value] : accountSettings.enforced.asKeyValueRange()) {
             if (!merged.enforced.contains(key)) {
                 merged.enforced.insert(key, value);
