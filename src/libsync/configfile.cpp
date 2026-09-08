@@ -976,6 +976,28 @@ int ConfigFile::proxyPort() const
     return getValue(QLatin1String(proxyPortC)).toInt();
 }
 
+ManagedProxySettings ConfigFile::managedProxySettings() const
+{
+    const auto typeKey = QStringLiteral("proxyType");
+    const auto hostKey = QStringLiteral("proxyHost");
+    const auto portKey = QStringLiteral("proxyPort");
+
+    const auto fromPolicy = [](SettingSourceType source) {
+        return source != SettingSourceType::BuiltinDefault && source != SettingSourceType::UserConfig;
+    };
+
+    ManagedProxySettings managed;
+    managed.typeManaged = fromPolicy(sourceOf(typeKey));
+    managed.hostManaged = fromPolicy(sourceOf(hostKey));
+    managed.portManaged = fromPolicy(sourceOf(portKey));
+    managed.isEnforced = isEnforced(typeKey) || isEnforced(hostKey) || isEnforced(portKey);
+    managed.isManaged = managed.typeManaged || managed.hostManaged || managed.portManaged;
+    managed.proxyType = getConfig(typeKey, QNetworkProxy::DefaultProxy).value.toInt();
+    managed.proxyHostName = getConfig(hostKey).value.toString();
+    managed.proxyPort = getConfig(portKey).value.toInt();
+    return managed;
+}
+
 bool ConfigFile::proxyNeedsAuth() const
 {
     return getValue(QLatin1String(proxyNeedsAuthC)).toBool();
