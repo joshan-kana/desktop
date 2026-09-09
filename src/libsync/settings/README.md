@@ -28,10 +28,10 @@ read path.
 
 There is exactly one way to read a managed setting: getConfig. It walks the full
 hierarchy and returns the effective value plus metadata (source, enforcement).
-getValue and getPolicySetting become internals of the source adapters and are
-removed from the public read surface. No managed key is read with raw QSettings.
+getValue and getPolicySetting stay only for keys not yet onboarded, and a wired
+managed key is never read with raw QSettings.
 
-We do not move away from ConfigFile. ConfigFile becomes the enforcement gateway;
+We do not move away from ConfigFile. ConfigFile is the enforcement gateway;
 getConfig is its single read entry point.
 
 ## API (on ConfigFile)
@@ -111,19 +111,23 @@ an enforced proxy always comes from device policy.
 
 ## Scope
 
-First slice (this change):
-- Add getConfig, the typed getConfig<T> template, setConfig, isEnforced, sourceOf,
-  with tests.
-- Re express skipUpdateCheck and autoUpdateCheck on getConfig<T>; remove
-  resolveManagedBool.
+Done:
+- getConfig, the typed getConfig<T> template, setConfig, isEnforced and sourceOf on
+  ConfigFile; resolveManagedBool removed.
+- Wired keys: skipUpdateCheck, autoUpdateCheck, the folder limit keys, proxy and
+  virtualFilesMode.
+- Enforced controls disabled with a managed label in the settings dialogs (folder
+  limits in advancedsettings, proxy in networksettings) and in the folder wizards
+  (virtual files).
+- Server delivered values sanitized against the client allow list and range checked.
 
-Incremental follow up (not in this slice):
+Follow up:
 - Migrate the remaining settings onto getConfig as they are onboarded into the
   schema, retiring their getValue and getPolicySetting use.
-- A QML facade (Q_INVOKABLE getConfig/setConfig/isEnforced) for the settings UI,
-  landing with the UI enforcement work.
-- Disable enforced controls in the settings dialogs.
+- A QML facade (Q_INVOKABLE getConfig/setConfig/isEnforced) for the QML settings UI.
 - A guard against new raw QSettings reads of managed keys.
+- Reapply a managed proxy to loaded accounts on capability refresh; today a managed
+  proxy applies at account load, so a change takes effect on reconnect or restart.
 
 ## Out of scope
 
@@ -132,9 +136,11 @@ not managed and keep plain setValue/getValue.
 
 ## Testing
 
-Unit tests: getConfig across bool, int and string; setConfig writes when not
-enforced and refuses when enforced; isEnforced and sourceOf metadata; the migrated
-skipUpdateCheck and autoUpdateCheck resolve identically to before.
+Unit tests are still pending (tracked separately). They should cover getConfig
+across bool, int and string; setConfig writing when not enforced and refusing when
+enforced; isEnforced and sourceOf metadata; the proxy per field merge and the
+setProxySettings guard while managed; and virtualFilesMode default versus enforced
+in the wizards.
 
 ## Flow diagrams
 
