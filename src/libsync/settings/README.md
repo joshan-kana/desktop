@@ -67,6 +67,144 @@ getConfig is its single read entry point.
 - Update and proxy keys are default only from the server. Only device policy can
   enforce them, so a server cannot disable updates or reroute traffic.
 
+## The schema
+
+The schema is the declared contract for managed settings. Each entry is one
+SettingSpec:
+
+```cpp
+struct SettingSpec {
+    QString key;              // the setting name
+    QVariant builtinDefault;  // value when no source has one, and it fixes the type
+    bool enforceable = false; // may a policy force it?
+    SettingScope scope = SettingScope::User; // Device, User, Account, Folder
+};
+```
+
+ManagedSettingsSchema::all() lists them and find(key) looks one up. Three fields do
+the work at resolution time.
+
+enforceable is the security gate. A non enforceable key ignores every enforced
+source, so no registry key, managed plist or server can lock it:
+
+```cpp
+// ManagedSettings::resolve
+for (const auto &source : _sources) {
+    if (source->enforcement() == EnforcementState::Enforced && !spec.enforceable) {
+        continue; // enforced sources do not apply to a non enforceable key
+    }
+    ...
+}
+```
+
+builtinDefault is the fallback value and it fixes the type. The resolver coerces the
+resolved value to that type, so a registry or plist string becomes a real bool or
+int:
+
+```cpp
+if (!settingSource) {
+    return {spec.key, spec.builtinDefault, SettingSourceType::BuiltinDefault, ...};
+}
+if (spec.builtinDefault.isValid()) {
+    settingValue.convert(spec.builtinDefault.metaType());
+}
+```
+
+Being in the schema is not required to resolve a key. getConfig synthesizes a spec
+for anything not declared, defaulting enforceable to true:
+
+```cpp
+const auto spec = ManagedSettingsSchema::find(name)
+    .value_or(SettingSpec{name, builtinDefault, /*enforceable*/ true, SettingScope::User});
+```
+
+So you add a key to the schema to override those defaults: to make it non
+enforceable, to give it a fixed default and type, or to have it appear in the
+resolveAll diagnostics.
+
+Note two separate enforceable flags. The schema enforceable above decides whether
+any enforced source (device or server) is honored. A second flag, serverEnforceable
+in servermanagedsettings, decides whether the server specifically may enforce a key:
+
+```cpp
+// sanitizeServerManagedSettings keeps a server enforced value only when allowed
+if (policy != accepted.cend() && policy->serverEnforceable && valueInRange(key, value)) {
+    clean.enforced.insert(key, value);
+}
+```
+
+That is why update and proxy keys are serverEnforceable false (a server may only
+default them) yet still lockable by device policy, whose schema enforceable is true.
+
+## Sources and the resolver
+
+A source is a small adapter over one place a value can come from. It holds no
+values; it reads them live and tags them with a provenance, an enforcement state and
+a priority:
+
+```cpp
+class SettingSource {
+public:
+    virtual std::optional<QVariant> read(const QString &key, const QString &group) const = 0;
+    virtual SettingSourceType type() const = 0;         // PlatformPolicy, ServerDefault, ...
+    virtual EnforcementState enforcement() const = 0;   // Enforced or NotEnforced
+    virtual int priority() const = 0;                   // who wins on a conflict
+};
+```
+
+buildDeviceSources and buildServerSources are factory functions that construct these
+adapters for the current environment. The device set depends on the platform and
+carries the priorities:
+
+```cpp
+// buildDeviceSources, Windows
+HKCU\Software\Policies\<vendor>\<app>   PlatformPolicy,  Enforced,    210
+HKLM\Software\Policies\<vendor>\<app>   PlatformPolicy,  Enforced,    200
+HKLM\Software\<vendor>\<app>            PlatformDefault, NotEnforced,  20
+// macOS: MacForcedPreferenceSource(200) + /Library/Preferences/<domain>.plist (20)
+// Linux: <sysconfdir>/<app>/<app>.conf (20)
+```
+
+```cpp
+// buildServerSources, from the cached server settings
+if (!sanitized.enforced.isEmpty()) {
+    sources.push_back(std::make_unique<ServerSettingsSource>(
+        sanitized.enforced, SettingSourceType::ServerEnforced, EnforcementState::Enforced, 100));
+}
+if (!sanitized.defaults.isEmpty()) {
+    sources.push_back(std::make_unique<ServerSettingsSource>(
+        sanitized.defaults, SettingSourceType::ServerDefault, EnforcementState::NotEnforced, 30));
+}
+```
+
+getConfig builds the whole stack fresh on each call, so resolution reflects the
+current registry, plist and cfg (which is why a device policy change is seen after
+the dialog reopens):
+
+```cpp
+ManagedSettings resolver;
+for (auto &deviceSource : buildDeviceSources()) {
+    resolver.addSource(std::move(deviceSource));
+}
+resolver.addSource(std::make_unique<UserConfigSource>(configFile(), groupName));      // 50
+resolver.addSource(std::make_unique<UserConfigSource>(configFile(), QString(), 49));  // legacy top level
+for (auto &serverSource : buildServerSources(serverManagedSettings())) {
+    resolver.addSource(std::move(serverSource));
+}
+return resolver.resolve(spec);
+```
+
+resolve then asks every source and keeps the highest priority one that has a value,
+subject to the enforceable gate:
+
+```cpp
+if (source->priority() > settingPriority) {
+    settingSource = source.get();
+    settingValue = *value;
+    settingPriority = source->priority();
+}
+```
+
 ## Managed keys
 
 Wired through getConfig: skipUpdateCheck, autoUpdateCheck, confirmExternalStorage,
