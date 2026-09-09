@@ -979,6 +979,10 @@ int ConfigFile::proxyPort() const
 
 ManagedProxySettings ConfigFile::managedProxySettings() const
 {
+    // Policy overlay only. It reports the fields a server or device policy sets, keyed
+    // proxyType/proxyHost/proxyPort. The user's own proxy lives in the account or the
+    // legacy Proxy/type storage, so the caller merges this over that base and keeps its
+    // own value where a field is not managed.
     const auto typeKey = QStringLiteral("proxyType");
     const auto hostKey = QStringLiteral("proxyHost");
     const auto portKey = QStringLiteral("proxyPort");
