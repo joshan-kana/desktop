@@ -112,7 +112,25 @@ account or the legacy Proxy/type storage, so the two never collide. The server c
 only default the proxy, never enforce it, so an enforced proxy always comes from
 device policy.
 
+## Without an enterprise subscription
+
+Server delivery is gated on the enterprise subscription. The support app returns no
+desktopClient capability for an account without a valid subscription, and the client
+drops any account that is not subscribed: AccountManager::updateServerManagedSettings
+merges only subscribed accounts, so with none subscribed the server managed cache is
+cleared.
+
+For such a user the server layer is inert: no server defaults, no server enforced
+values, no "Managed by your organization" label. Everything else is unchanged.
+getConfig still resolves through device policy, user config and the builtin default,
+so device policy (Windows registry, macOS managed preferences) still enforces
+settings, since that is local OS policy and independent of the subscription. If a
+user loses the subscription, the next refresh drops the cached server settings.
+
 ## Scope
+
+The feature is complete for the wired keys below. The remaining items are optional
+and not required for it.
 
 Done:
 - getConfig, the typed getConfig<T> template, setConfig, isEnforced and sourceOf on
@@ -122,15 +140,19 @@ Done:
 - Enforced controls disabled with a managed label in the settings dialogs (folder
   limits in advancedsettings, proxy in networksettings) and in the folder wizards
   (virtual files).
-- Server delivered values sanitized against the client allow list and range checked.
+- Server delivered values sanitized against the client allow list and validated.
+- Unit tests for the resolver, sanitize, the schema, the proxy per field merge and
+  virtualFilesMode resolution (test/testmanagedsettings.cpp).
 
-Follow up:
-- Migrate the remaining settings onto getConfig as they are onboarded into the
-  schema, retiring their getValue and getPolicySetting use.
-- A QML facade (Q_INVOKABLE getConfig/setConfig/isEnforced) for the QML settings UI.
+Optional, not required:
+- Migrate other settings onto getConfig as they are onboarded into the schema,
+  retiring their getValue and getPolicySetting use.
+- A QML facade (Q_INVOKABLE getConfig/setConfig/isEnforced) if the settings UI moves
+  to QML.
 - A guard against new raw QSettings reads of managed keys.
-- Reapply a managed proxy to loaded accounts on capability refresh; today a managed
-  proxy applies at account load, so a change takes effect on reconnect or restart.
+
+A managed proxy applies at account load, so a policy change takes effect on reconnect
+or restart; there is no live reapply on capability refresh.
 
 ## Out of scope
 
@@ -139,11 +161,12 @@ not managed and keep plain setValue/getValue.
 
 ## Testing
 
-Unit tests are still pending (tracked separately). They should cover getConfig
-across bool, int and string; setConfig writing when not enforced and refusing when
-enforced; isEnforced and sourceOf metadata; the proxy per field merge and the
-setProxySettings guard while managed; and virtualFilesMode default versus enforced
-in the wizards.
+test/testmanagedsettings.cpp covers the resolver priority order, getConfig and
+setConfig, sanitize including the virtualFilesMode validation, the schema, the proxy
+per field merge and the global proxy honoring a managed default, and virtualFilesMode
+default versus enforced. The Account::setProxySettings write guard is not covered
+there because Account::create self references and trips the leak checker; it is owed
+in a non ASAN test.
 
 ## Flow diagrams
 
