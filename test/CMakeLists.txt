@@ -136,6 +136,17 @@ add_test(NAME SearchQmlTest
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 set_tests_properties(SearchQmlTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+add_executable(AssistantWindowQmlTest qml/assistant/assistantwindowqmltestrunner.cpp)
+target_link_libraries(AssistantWindowQmlTest PRIVATE nextcloudCore Qt::QuickTest)
+set_target_properties(AssistantWindowQmlTest PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${BIN_OUTPUT_DIRECTORY}
+    FOLDER Tests
+)
+add_test(NAME AssistantWindowQmlTest
+    COMMAND AssistantWindowQmlTest -input "${CMAKE_CURRENT_SOURCE_DIR}/qml/assistant/testassistantwindow.qml"
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+set_tests_properties(AssistantWindowQmlTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 nextcloud_add_test(TalkReply)
 nextcloud_add_test(LockFile)
 nextcloud_add_test(ShareModel)
