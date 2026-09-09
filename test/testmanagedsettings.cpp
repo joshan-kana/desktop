@@ -3,21 +3,24 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-#include <QtTest>
-#include <QTemporaryDir>
-#include <QStandardPaths>
+#include <QNetworkProxy>
+#include <QScopeGuard>
 #include <QSet>
+#include <QStandardPaths>
+#include <QTemporaryDir>
+#include <QtTest>
 #include <algorithm>
 #include <memory>
 #include <optional>
 
-#include "configfile.h"
 #include "capabilities.h"
+#include "clientproxy.h"
+#include "configfile.h"
+#include "settings/managedconfig.h"
 #include "settings/managedsettings.h"
 #include "settings/managedsettingsschema.h"
-#include "settings/settingsources.h"
 #include "settings/servermanagedsettings.h"
-#include "settings/managedconfig.h"
+#include "settings/settingsources.h"
 
 using namespace OCC;
 
@@ -329,8 +332,7 @@ private Q_SLOTS:
     {
         ServerManagedSettings raw;
         raw.defaults = QVariantMap{{QStringLiteral("skipUpdateCheck"), false}, {QStringLiteral("bogus"), 1}};
-        raw.enforced = QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("onlineOnly")},
-            {QStringLiteral("secretKey"), QStringLiteral("x")}};
+        raw.enforced = QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("wincfapi")}, {QStringLiteral("secretKey"), QStringLiteral("x")}};
 
         const auto clean = sanitizeServerManagedSettings(raw);
 
@@ -358,7 +360,7 @@ private Q_SLOTS:
     {
         // virtualFilesMode stays server enforceable, so it survives sanitize.
         ServerManagedSettings raw;
-        raw.enforced = QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("onlineOnly")}};
+        raw.enforced = QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("wincfapi")}};
         const auto clean = sanitizeServerManagedSettings(raw);
 
         const SettingSpec spec{QStringLiteral("virtualFilesMode"), QStringLiteral(""), true, SettingScope::User};
@@ -374,7 +376,7 @@ private Q_SLOTS:
 
         // Server enforced beats the user config.
         const auto withoutDevice = resolver.resolve(spec);
-        QCOMPARE(withoutDevice.value.toString(), QStringLiteral("onlineOnly"));
+        QCOMPARE(withoutDevice.value.toString(), QStringLiteral("wincfapi"));
         QCOMPARE(withoutDevice.source, SettingSourceType::ServerEnforced);
 
         // Device policy still beats server enforced.
@@ -502,8 +504,8 @@ private Q_SLOTS:
     {
         ServerManagedSettings raw;
         raw.enforced = QVariantMap{{QStringLiteral("skipUpdateCheck"), true},
-            {QStringLiteral("proxyHost"), QStringLiteral("evil.example.com")},
-            {QStringLiteral("virtualFilesMode"), QStringLiteral("onlineOnly")}};
+                                   {QStringLiteral("proxyHost"), QStringLiteral("evil.example.com")},
+                                   {QStringLiteral("virtualFilesMode"), QStringLiteral("wincfapi")}};
 
         const auto clean = sanitizeServerManagedSettings(raw);
 
@@ -511,6 +513,139 @@ private Q_SLOTS:
         QVERIFY(!clean.enforced.contains(QStringLiteral("skipUpdateCheck")));
         QVERIFY(!clean.enforced.contains(QStringLiteral("proxyHost")));
         QVERIFY(clean.enforced.contains(QStringLiteral("virtualFilesMode")));
+    }
+
+    void testSanitizeDropsInvalidVirtualFilesMode()
+    {
+        ServerManagedSettings raw;
+        raw.defaults = QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("bogus")}};
+        raw.enforced = QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("wincfapi")}};
+
+        const auto clean = sanitizeServerManagedSettings(raw);
+
+        QVERIFY(!clean.defaults.contains(QStringLiteral("virtualFilesMode")));
+        QVERIFY(clean.enforced.contains(QStringLiteral("virtualFilesMode")));
+    }
+
+    void testSchemaHasVirtualFilesMode()
+    {
+        const auto spec = ManagedSettingsSchema::find(QStringLiteral("virtualFilesMode"));
+        QVERIFY(spec.has_value());
+        QVERIFY(spec->enforceable);
+        QCOMPARE(spec->builtinDefault.toString(), QStringLiteral("off"));
+    }
+
+    void testManagedVirtualFilesModeUnmanagedWhenNothingSet()
+    {
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+        ManagedConfig::instance().invalidate();
+
+        const auto managed = config.managedVirtualFilesMode();
+        QVERIFY(!managed.isManaged);
+        QVERIFY(!managed.isEnforced);
+    }
+
+    void testManagedVirtualFilesModeServerDefault()
+    {
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+        ManagedConfig::instance().invalidate();
+
+        ServerManagedSettings settings;
+        settings.defaults = QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("wincfapi")}};
+        config.setServerManagedSettings(settings);
+
+        const auto managed = config.managedVirtualFilesMode();
+        QVERIFY(managed.isManaged);
+        QVERIFY(!managed.isEnforced);
+        QVERIFY(managed.enabled);
+    }
+
+    void testManagedVirtualFilesModeServerEnforced()
+    {
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+        ManagedConfig::instance().invalidate();
+
+        ServerManagedSettings settings;
+        settings.enforced = QVariantMap{{QStringLiteral("virtualFilesMode"), QStringLiteral("off")}};
+        config.setServerManagedSettings(settings);
+
+        const auto managed = config.managedVirtualFilesMode();
+        QVERIFY(managed.isManaged);
+        QVERIFY(managed.isEnforced);
+        QVERIFY(!managed.enabled);
+    }
+
+    void testManagedProxyServerDefaultPartialMerge()
+    {
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+        ManagedConfig::instance().invalidate();
+
+        ServerManagedSettings settings;
+        settings.defaults = QVariantMap{{QStringLiteral("proxyType"), QNetworkProxy::HttpProxy}};
+        config.setServerManagedSettings(settings);
+
+        const auto managed = config.managedProxySettings();
+        QVERIFY(managed.isManaged);
+        QVERIFY(!managed.isEnforced);
+        QVERIFY(managed.typeManaged);
+        QVERIFY(!managed.hostManaged);
+        QVERIFY(!managed.portManaged);
+        QCOMPARE(managed.proxyType, static_cast<int>(QNetworkProxy::HttpProxy));
+    }
+
+    void testManagedProxyServerDefaultAllFields()
+    {
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+        ManagedConfig::instance().invalidate();
+
+        ServerManagedSettings settings;
+        settings.defaults = QVariantMap{{QStringLiteral("proxyType"), QNetworkProxy::Socks5Proxy},
+                                        {QStringLiteral("proxyHost"), QStringLiteral("proxy.example.com")},
+                                        {QStringLiteral("proxyPort"), 1080}};
+        config.setServerManagedSettings(settings);
+
+        const auto managed = config.managedProxySettings();
+        QVERIFY(managed.typeManaged);
+        QVERIFY(managed.hostManaged);
+        QVERIFY(managed.portManaged);
+        QCOMPARE(managed.proxyHostName, QStringLiteral("proxy.example.com"));
+        QCOMPARE(managed.proxyPort, 1080);
+    }
+
+    void testGlobalProxyHonorsManagedDefault()
+    {
+        const auto savedProxy = QNetworkProxy::applicationProxy();
+        const auto restore = qScopeGuard([&] {
+            QNetworkProxy::setApplicationProxy(savedProxy);
+        });
+
+        QTemporaryDir dir;
+        ConfigFile config;
+        config.setConfDir(dir.path());
+        ManagedConfig::instance().invalidate();
+
+        ServerManagedSettings settings;
+        settings.defaults = QVariantMap{{QStringLiteral("proxyType"), QNetworkProxy::HttpProxy},
+                                        {QStringLiteral("proxyHost"), QStringLiteral("proxy.example.com")},
+                                        {QStringLiteral("proxyPort"), 8080}};
+        config.setServerManagedSettings(settings);
+
+        ClientProxy().setupQtProxyFromConfig();
+
+        const auto applied = QNetworkProxy::applicationProxy();
+        QCOMPARE(applied.type(), QNetworkProxy::HttpProxy);
+        QCOMPARE(applied.hostName(), QStringLiteral("proxy.example.com"));
+        QCOMPARE(applied.port(), quint16(8080));
     }
 };
 
